@@ -1,8 +1,10 @@
 fastapi
 uvicorn
+python-dotenv
 python-multipart
 pydantic
 pillow
+pillow-heif
 opencv-python
 numpy
 rembg
@@ -10,3 +12,4 @@ trimesh
 cadquery
 aiofiles
 ezdxf
+httpx

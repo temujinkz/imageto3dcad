@@ -43,6 +43,10 @@ class JobStore:
             "warnings": [],
             "options": options,
             "error": None,
+            "extra_image_paths": [],
+            "freecad": {},
+            "preview_model_path": None,
+            "mesh_source": None,
         }
         with self._lock:
             self._jobs[job_id] = job

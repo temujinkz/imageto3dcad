@@ -1,154 +1,173 @@
 "use client";
 
 import { ChangeEvent, DragEvent, useRef, useState } from "react";
-import { ImagePlus, UploadCloud } from "lucide-react";
+import { Film, Layers, Loader2, UploadCloud, X } from "lucide-react";
+import { ACCEPT_ATTRIBUTE, isSupportedMedia, isVideoFile, normalizeMediaFiles } from "@/lib/imageConvert";
 
 type UploadCardProps = {
-  file: File | null;
-  imagePreviewUrl: string | null;
-  backendImageUrl?: string;
-  maskedImageUrl?: string;
-  jobId?: string;
-  isUploading: boolean;
-  isProcessing: boolean;
-  onFileSelect: (file: File) => void;
-  onUpload: () => void;
+  busy: boolean;
+  busyLabel?: string;
+  disabled?: boolean;
+  error?: string | null;
+  previewUrls: string[];
+  isVideoPreview: boolean;
+  onMediaReady: (files: File[], video: File | null) => void;
+  onReset: () => void;
 };
 
-const acceptedTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-}
-
 export function UploadCard({
-  file,
-  imagePreviewUrl,
-  backendImageUrl,
-  maskedImageUrl,
-  jobId,
-  isUploading,
-  isProcessing,
-  onFileSelect,
-  onUpload
+  busy,
+  busyLabel,
+  disabled,
+  error,
+  previewUrls,
+  isVideoPreview,
+  onMediaReady,
+  onReset
 }: UploadCardProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const hasMedia = previewUrls.length > 0;
 
-  function handleFile(nextFile: File) {
-    if (!acceptedTypes.includes(nextFile.type)) {
-      setLocalError("Use a PNG, JPG, JPEG, or WebP image.");
+  async function handleFiles(fileList: File[]) {
+    const candidates = fileList.filter(isSupportedMedia);
+    if (!candidates.length) {
+      setLocalError("Drop a photo (PNG/JPG/HEIC/WebP...), a set of angle photos, or a short video.");
       return;
     }
 
     setLocalError(null);
-    onFileSelect(nextFile);
+
+    const video = candidates.find(isVideoFile) ?? null;
+    const images = candidates.filter((candidate) => !isVideoFile(candidate));
+
+    try {
+      if (video) {
+        onMediaReady([], video);
+        return;
+      }
+      const normalized = await normalizeMediaFiles(images);
+      onMediaReady(normalized, null);
+    } catch (conversionError) {
+      setLocalError(
+        conversionError instanceof Error ? conversionError.message : "Could not read that file. Try another photo."
+      );
+    }
   }
 
   function handleInputChange(event: ChangeEvent<HTMLInputElement>) {
-    const nextFile = event.target.files?.[0];
-    if (nextFile) {
-      handleFile(nextFile);
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    if (files.length) {
+      void handleFiles(files);
     }
+    event.target.value = "";
   }
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setDragActive(false);
-
-    const nextFile = event.dataTransfer.files?.[0];
-    if (nextFile) {
-      handleFile(nextFile);
+    if (disabled || busy) {
+      return;
+    }
+    const files = Array.from(event.dataTransfer.files ?? []);
+    if (files.length) {
+      void handleFiles(files);
     }
   }
 
   return (
-    <section id="upload" className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Step 1</p>
-          <h2 className="text-2xl font-semibold text-ink">Upload object photo</h2>
-        </div>
-        <ImagePlus className="h-6 w-6 text-blue-600" aria-hidden />
-      </div>
-
+    <section id="upload" className="rounded-2xl border border-slate-200 bg-white p-6 shadow-soft sm:p-10">
       <div
-        onDragEnter={() => setDragActive(true)}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          if (!disabled && !busy) setDragActive(true);
+        }}
         onDragLeave={() => setDragActive(false)}
         onDragOver={(event) => event.preventDefault()}
         onDrop={handleDrop}
-        className={`flex min-h-[260px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-5 text-center transition ${
-          dragActive ? "border-blue-500 bg-blue-50" : "border-slate-300 bg-slate-50"
-        }`}
-        onClick={() => inputRef.current?.click()}
+        onClick={() => !disabled && !busy && inputRef.current?.click()}
         role="button"
         tabIndex={0}
+        aria-disabled={disabled || busy}
+        className={`relative flex min-h-[380px] flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition ${
+          disabled || busy ? "cursor-not-allowed opacity-90" : "cursor-pointer"
+        } ${dragActive ? "border-blue-500 bg-blue-50" : "border-slate-300 bg-slate-50"}`}
       >
         <input
           ref={inputRef}
           className="hidden"
           type="file"
-          accept="image/png,image/jpeg,image/jpg,image/webp"
+          multiple
+          accept={ACCEPT_ATTRIBUTE}
           onChange={handleInputChange}
+          disabled={disabled || busy}
         />
 
-        {imagePreviewUrl ? (
+        {busy ? (
+          <>
+            <Loader2 className="mb-4 h-12 w-12 animate-spin text-blue-600" aria-hidden />
+            <p className="text-xl font-semibold text-ink">{busyLabel ?? "Processing..."}</p>
+            <p className="mt-2 text-sm text-slate-600">This can take a moment for 3D reconstruction and CAD export.</p>
+          </>
+        ) : hasMedia ? (
           <div className="w-full">
-            <div className="checkerboard mx-auto mb-4 flex max-h-[360px] max-w-full items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={imagePreviewUrl} alt="Uploaded object preview" className="max-h-[360px] w-full object-contain" />
-            </div>
-            {file && (
-              <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-slate-600">
-                <span className="font-medium text-ink">{file.name}</span>
-                <span>{formatBytes(file.size)}</span>
+            {isVideoPreview ? (
+              <div className="mx-auto mb-4 flex max-h-[320px] max-w-full items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-black">
+                <video src={previewUrls[0]} controls className="max-h-[320px] w-full" />
+              </div>
+            ) : (
+              <div className="mx-auto mb-4 grid max-w-full grid-cols-2 gap-3 sm:grid-cols-4">
+                {previewUrls.slice(0, 8).map((url, index) => (
+                  <div
+                    key={url}
+                    className="checkerboard flex aspect-square items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt={`Uploaded angle ${index + 1}`} className="h-full w-full object-contain" />
+                  </div>
+                ))}
               </div>
             )}
+            <p className="text-sm font-medium text-slate-600">
+              {isVideoPreview
+                ? "Video ready. Drop a new file to replace it."
+                : `${previewUrls.length} photo${previewUrls.length > 1 ? "s" : ""} ready. Drop more angles or a new photo to replace.`}
+            </p>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onReset();
+              }}
+              className="mt-4 inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-red-300 hover:text-red-600"
+            >
+              <X className="h-4 w-4" aria-hidden />
+              Start over
+            </button>
           </div>
         ) : (
           <>
-            <UploadCloud className="mb-3 h-10 w-10 text-blue-600" aria-hidden />
-            <p className="text-lg font-semibold text-ink">Drag and drop an object photo</p>
-            <p className="mt-1 text-sm text-slate-600">PNG, JPG, JPEG, or WebP. Top-down photos of simple parts work best.</p>
+            <UploadCloud className="mb-4 h-14 w-14 text-blue-600" aria-hidden />
+            <p className="text-2xl font-semibold text-ink">Drag & drop your photo here</p>
+            <p className="mt-2 max-w-md text-base text-slate-600">
+              or click to browse. PNG, JPG, HEIC, WebP, and more all just work.
+            </p>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-4 text-sm text-slate-500">
+              <span className="inline-flex items-center gap-1.5">
+                <Layers className="h-4 w-4" aria-hidden /> Drop several angle photos at once
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Film className="h-4 w-4" aria-hidden /> or a short orbit video
+              </span>
+            </div>
           </>
         )}
       </div>
 
-      {localError && <p className="mt-3 text-sm font-medium text-red-600">{localError}</p>}
-
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={onUpload}
-          disabled={!file || isUploading || isProcessing}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-        >
-          <UploadCloud className="h-4 w-4" aria-hidden />
-          {isUploading ? "Uploading..." : "Upload to Backend"}
-        </button>
-        {jobId && <span className="text-xs text-slate-500">Job ID: {jobId}</span>}
-      </div>
-
-      {(backendImageUrl || maskedImageUrl) && (
-        <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
-          {backendImageUrl && <PreviewLink label="Uploaded image URL" url={backendImageUrl} />}
-          {maskedImageUrl && <PreviewLink label="Masked image URL" url={maskedImageUrl} />}
-        </div>
+      {(localError || error) && (
+        <p className="mt-4 text-sm font-medium text-red-600">{localError ?? error}</p>
       )}
     </section>
-  );
-}
-
-function PreviewLink({ label, url }: { label: string; url: string }) {
-  return (
-    <a href={url} target="_blank" rel="noreferrer" className="truncate rounded-md border border-slate-200 bg-slate-50 px-3 py-2 hover:border-blue-300">
-      <span className="mr-2 font-medium text-ink">{label}:</span>
-      <span>{url}</span>
-    </a>
   );
 }

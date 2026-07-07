@@ -48,6 +48,31 @@ class GenerateCadRequest(BaseModel):
     mode: str | None = None
 
 
+class ProcessRequest(BaseModel):
+    job_id: str
+    generate_mesh: bool = True
+    generate_cad: bool = True
+    generate_freecad: bool = True
+    known_width_mm: float | None = None
+    known_height_mm: float | None = None
+    thickness_mm: float | None = None
+
+
+class ProcessResponse(BaseModel):
+    job_id: str
+    status: JobStatus
+    progress: float
+    message: str
+    preview_model_url: str | None = None
+    files: dict[str, str] = Field(default_factory=dict)
+    cad_summary: CadSummary | None = None
+    warnings: list[str] = Field(default_factory=list)
+    freecad: dict[str, str] = Field(default_factory=dict)
+    mesh_source: str | None = None
+    mesh_is_high_fidelity: bool = False
+
+
+
 class JobStatusResponse(BaseModel):
     job_id: str
     status: JobStatus
@@ -62,3 +87,20 @@ class JobStatusResponse(BaseModel):
     input_image_url: str | None = None
     masked_image_url: str | None = None
     error: str | None = None
+    freecad: dict[str, str] = Field(default_factory=dict)
+    mesh_source: str | None = None
+    mesh_is_high_fidelity: bool = False
+
+
+class CapabilitiesResponse(BaseModel):
+    triposr_enabled: bool
+    triposr_configured: bool
+    rembg_available: bool
+    cadquery_available: bool
+    trimesh_available: bool
+    opencv_available: bool
+    luma_configured: bool
+    csm_configured: bool
+    tripo_api_configured: bool
+    supported_image_formats: list[str]
+    supported_video_formats: list[str]

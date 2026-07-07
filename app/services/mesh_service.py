@@ -8,7 +8,7 @@ from PIL import Image
 
 from ..config import Settings
 from .image_geometry import analyze_image_geometry
-from .triposr_service import generate_mesh_from_image
+from .reconstruction_api import reconstruct_from_images
 
 
 def generate_mesh_assets(
@@ -18,6 +18,7 @@ def generate_mesh_assets(
     known_width_mm: float | None = None,
     known_height_mm: float | None = None,
     thickness_mm: float | None = None,
+    extra_image_paths: list[str | Path] | None = None,
 ) -> dict:
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -31,7 +32,11 @@ def generate_mesh_assets(
     )
     warnings = list(geometry.get("warnings", []))
 
-    tripo = generate_mesh_from_image(str(image_path), str(output_dir / "triposr"), settings=settings)
+    image_paths = [Path(image_path)]
+    if extra_image_paths:
+        image_paths.extend(Path(path) for path in extra_image_paths if Path(path).exists())
+
+    tripo = reconstruct_from_images(image_paths, output_dir / "reconstruction", settings)
     if any(tripo.get(key) for key in ("stl_path", "obj_path", "glb_path")):
         return {
             "source": tripo.get("source", "triposr"),

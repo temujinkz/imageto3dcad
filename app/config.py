@@ -5,6 +5,12 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(_BACKEND_ROOT / ".env")
+load_dotenv(_BACKEND_ROOT / ".env.local", override=True)
+
 
 def _env_bool(name: str, default: bool) -> bool:
     value = os.getenv(name)
@@ -36,7 +42,19 @@ class Settings:
     default_width_mm: float
     default_height_mm: float
     enable_rembg: bool
+    background_removal_backend: str
     opencv_timeout_seconds: int
+    luma_api_key: str | None
+    luma_api_base: str
+    csm_api_key: str | None
+    csm_api_base: str
+    tripo_api_key: str | None
+    tripo_api_base: str
+    meshy_api_key: str | None
+    meshy_api_base: str
+    reconstruction_timeout_seconds: int
+    max_upload_images: int
+    max_video_frames: int
 
 
 @lru_cache(maxsize=1)
@@ -50,10 +68,7 @@ def get_settings() -> Settings:
         api_prefix="/api",
         storage_root=storage_root,
         backend_base_url=os.getenv("BACKEND_BASE_URL"),
-        cors_origins=_env_list(
-            "CORS_ORIGINS",
-            ["http://localhost:3000", "http://127.0.0.1:3000"],
-        ),
+        cors_origins=_env_list("CORS_ORIGINS", ["*"]),
         use_triposr=_env_bool("USE_TRIPOSR", True),
         triposr_run_py=os.getenv("PHOTO2CAD_TRIPOSR_RUN_PY"),
         triposr_python_bin=os.getenv("PHOTO2CAD_TRIPOSR_PYTHON_BIN", "python"),
@@ -63,5 +78,17 @@ def get_settings() -> Settings:
         default_width_mm=float(os.getenv("DEFAULT_WIDTH_MM", "80")),
         default_height_mm=float(os.getenv("DEFAULT_HEIGHT_MM", "50")),
         enable_rembg=_env_bool("ENABLE_REMBG", True),
+        background_removal_backend=os.getenv("BACKGROUND_REMOVAL_BACKEND", "rembg").strip().lower(),
         opencv_timeout_seconds=int(os.getenv("PHOTO2CAD_OPENCV_TIMEOUT_SECONDS", "5")),
+        luma_api_key=os.getenv("LUMA_API_KEY"),
+        luma_api_base=os.getenv("LUMA_API_BASE", "https://api.lumalabs.ai/dream-machine/v1"),
+        csm_api_key=os.getenv("CSM_API_KEY"),
+        csm_api_base=os.getenv("CSM_API_BASE", "https://api.csm.ai/v1"),
+        tripo_api_key=os.getenv("TRIPO_API_KEY"),
+        tripo_api_base=os.getenv("TRIPO_API_BASE", "https://api.tripo3d.ai/v2"),
+        meshy_api_key=os.getenv("MESHY_API_KEY"),
+        meshy_api_base=os.getenv("MESHY_API_BASE", "https://api.meshy.ai/openapi/v1"),
+        reconstruction_timeout_seconds=int(os.getenv("RECONSTRUCTION_TIMEOUT_SECONDS", "600")),
+        max_upload_images=int(os.getenv("MAX_UPLOAD_IMAGES", "20")),
+        max_video_frames=int(os.getenv("MAX_VIDEO_FRAMES", "12")),
     )

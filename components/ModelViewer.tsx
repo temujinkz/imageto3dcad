@@ -2,22 +2,31 @@
 
 import { Suspense, useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { Bounds, Center, Environment, OrbitControls, useGLTF, useProgress } from "@react-three/drei";
+import { Bounds, Center, Environment, Html, OrbitControls, useGLTF } from "@react-three/drei";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { useLoader } from "@react-three/fiber";
-import { Box, RotateCcw } from "lucide-react";
+import { Box, RotateCcw, TriangleAlert } from "lucide-react";
 import * as THREE from "three";
-import type { GenerationMode } from "@/lib/types";
 
 type ModelViewerProps = {
   modelUrl?: string;
-  mode?: GenerationMode;
+  mode?: "mesh" | "cad" | "both";
+  meshSource?: string | null;
+  meshIsHighFidelity?: boolean;
 };
 
-export function ModelViewer({ modelUrl, mode }: ModelViewerProps) {
+const SOURCE_LABELS: Record<string, string> = {
+  triposr: "TripoSR",
+  luma: "Luma Dream Machine",
+  csm: "CSM.ai",
+  "tripo-api": "Tripo API",
+  meshy: "Meshy.ai"
+};
+
+export function ModelViewer({ modelUrl, mode, meshSource, meshIsHighFidelity }: ModelViewerProps) {
   const [resetKey, setResetKey] = useState(0);
-  const label = mode === "cad" ? "CAD Preview" : "Mesh Preview";
+  const label = mode === "cad" ? "CAD Preview" : mode === "both" ? "3D Preview" : "Mesh Preview";
   const extension = modelUrl?.split("?")[0].split(".").pop()?.toLowerCase();
   const canPreview = Boolean(modelUrl && ["glb", "gltf", "obj", "stl"].includes(extension ?? ""));
 
@@ -38,6 +47,23 @@ export function ModelViewer({ modelUrl, mode }: ModelViewerProps) {
           Reset Camera
         </button>
       </div>
+
+      {canPreview && meshSource && (
+        <div
+          className={`mb-4 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
+            meshIsHighFidelity ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"
+          }`}
+        >
+          {meshIsHighFidelity ? (
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          ) : (
+            <TriangleAlert className="h-3.5 w-3.5" aria-hidden />
+          )}
+          {meshIsHighFidelity
+            ? `3D reconstruction via ${SOURCE_LABELS[meshSource] ?? meshSource}`
+            : "Rough estimate only — no 3D reconstruction API configured, showing a flat fallback shape"}
+        </div>
+      )}
 
       <div className="h-[460px] overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
         {canPreview && modelUrl ? (
@@ -107,35 +133,9 @@ function StlModel({ url }: { url: string }) {
 }
 
 function LoaderFallback() {
-  const { progress } = useProgress();
-
   return (
-    <mesh>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color="#bfdbfe" wireframe opacity={0.45} transparent />
-      <HtmlLikeLabel text={`Loading ${Math.round(progress)}%`} />
-    </mesh>
-  );
-}
-
-function HtmlLikeLabel({ text }: { text: string }) {
-  const texture = useMemo(() => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 256;
-    canvas.height = 64;
-    const context = canvas.getContext("2d");
-    if (context) {
-      context.fillStyle = "#172033";
-      context.font = "24px sans-serif";
-      context.textAlign = "center";
-      context.fillText(text, 128, 40);
-    }
-    return new THREE.CanvasTexture(canvas);
-  }, [text]);
-
-  return (
-    <sprite position={[0, 0.9, 0]} scale={[1.8, 0.45, 1]}>
-      <spriteMaterial map={texture} transparent />
-    </sprite>
+    <Html center>
+      <div className="rounded-md bg-ink/90 px-3 py-1.5 text-sm font-medium text-white shadow-lg">Loading model...</div>
+    </Html>
   );
 }

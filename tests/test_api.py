@@ -34,7 +34,7 @@ class BackendApiTests(unittest.TestCase):
             files={"image": ("sample.png", sample_image(), "image/png")},
             data={"background_removal": "false"},
         )
-        self.assertEqual(upload.status_code, 202)
+        self.assertEqual(upload.status_code, 200)
         job_id = upload.json()["job_id"]
 
         uploaded_job = self.client.get(f"/api/jobs/{job_id}")

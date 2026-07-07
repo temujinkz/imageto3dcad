@@ -15,14 +15,12 @@ export type MeshFiles = {
 export type CadFiles = {
   step?: string;
   dxf?: string;
-  stl?: string;
+  cad_stl?: string;
 };
 
-export type GenerateMeshResponse = {
-  job_id: string;
-  status: "completed";
-  preview_model_url: string;
-  files: MeshFiles;
+export type FreeCADFiles = {
+  step?: string;
+  obj?: string;
 };
 
 export type CadSummary = {
@@ -35,19 +33,21 @@ export type CadSummary = {
   };
 };
 
-export type GenerateCadParams = {
-  known_width_mm?: number;
-  known_height_mm?: number;
-  thickness_mm?: number;
-  mode: "flat_part";
-};
-
-export type GenerateCadResponse = {
+export type ProcessResponse = {
   job_id: string;
-  status: "completed";
+  status: JobStatus;
+  progress: number;
+  message: string;
   preview_model_url?: string;
-  files: CadFiles;
+  files: MeshFiles & CadFiles & {
+    freecad_step?: string;
+    freecad_obj?: string;
+  };
   cad_summary?: CadSummary;
+  warnings?: string[];
+  freecad?: FreeCADFiles;
+  mesh_source?: string | null;
+  mesh_is_high_fidelity?: boolean;
 };
 
 export type JobResponse = {
@@ -55,13 +55,37 @@ export type JobResponse = {
   status: JobStatus;
   progress: number;
   message: string;
+  preview_model_url?: string;
+  files?: ProcessResponse["files"];
+  freecad?: FreeCADFiles;
+  warnings?: string[];
+  mesh_source?: string | null;
+  mesh_is_high_fidelity?: boolean;
 };
 
-export type GenerationMode = "mesh" | "cad";
+export type WorkflowStep =
+  | "Ready"
+  | "Converting format"
+  | "Removing background"
+  | "Uploading"
+  | "Generating 3D model"
+  | "Preparing CAD exports"
+  | "Completed"
+  | "Failed";
 
-export type GeneratedResult = {
-  mode: GenerationMode;
+export type PipelineResult = {
   previewModelUrl?: string;
-  files: MeshFiles & CadFiles;
+  files: ProcessResponse["files"];
+  freecad?: FreeCADFiles;
   cadSummary?: CadSummary;
+  warnings?: string[];
+  meshSource?: string | null;
+  meshIsHighFidelity?: boolean;
+};
+
+export type SelectedMedia = {
+  files: File[];
+  previewUrl: string;
+  maskedPreviewUrl?: string;
+  isVideo: boolean;
 };

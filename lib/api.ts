@@ -1,10 +1,4 @@
-import type {
-  GenerateCadParams,
-  GenerateCadResponse,
-  GenerateMeshResponse,
-  JobResponse,
-  UploadResponse
-} from "@/lib/types";
+import type { JobResponse, ProcessResponse, UploadResponse } from "@/lib/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
@@ -25,9 +19,34 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function uploadImage(file: File): Promise<UploadResponse> {
+export type Capabilities = {
+  rembg_available: boolean;
+  triposr_enabled: boolean;
+  triposr_configured: boolean;
+  luma_configured: boolean;
+  csm_configured: boolean;
+  tripo_api_configured: boolean;
+  meshy_configured: boolean;
+  supported_image_formats: string[];
+  supported_video_formats: string[];
+};
+
+export async function getCapabilities() {
+  return requestJson<Capabilities>("/api/capabilities");
+}
+
+export async function uploadMedia(files: File[], video?: File | null): Promise<UploadResponse> {
   const formData = new FormData();
-  formData.append("image", file);
+
+  if (video) {
+    formData.append("video", video);
+  } else if (files.length === 1) {
+    formData.append("image", files[0]);
+  } else {
+    files.forEach((file) => formData.append("images", file));
+  }
+
+  formData.append("background_removal", "true");
 
   return requestJson<UploadResponse>("/api/upload", {
     method: "POST",
@@ -35,22 +54,21 @@ export async function uploadImage(file: File): Promise<UploadResponse> {
   });
 }
 
-export async function generateMesh(jobId: string): Promise<GenerateMeshResponse> {
-  return requestJson<GenerateMeshResponse>("/api/generate-mesh", {
-    method: "POST",
-    body: JSON.stringify({ job_id: jobId })
-  });
-}
+export type ProcessOptions = {
+  known_width_mm?: number;
+  known_height_mm?: number;
+  thickness_mm?: number;
+};
 
-export async function generateCad(
-  jobId: string,
-  params: GenerateCadParams
-): Promise<GenerateCadResponse> {
-  return requestJson<GenerateCadResponse>("/api/generate-cad", {
+export async function processJob(jobId: string, options: ProcessOptions = {}): Promise<ProcessResponse> {
+  return requestJson<ProcessResponse>("/api/process", {
     method: "POST",
     body: JSON.stringify({
       job_id: jobId,
-      ...params
+      generate_mesh: true,
+      generate_cad: true,
+      generate_freecad: true,
+      ...options
     })
   });
 }
@@ -58,3 +76,5 @@ export async function generateCad(
 export async function getJob(jobId: string): Promise<JobResponse> {
   return requestJson<JobResponse>(`/api/jobs/${jobId}`);
 }
+
+export { API_BASE_URL };

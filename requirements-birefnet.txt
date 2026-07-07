@@ -1,0 +1,6 @@
+# Optional: install alongside requirements.txt to enable
+# BACKGROUND_REMOVAL_BACKEND=birefnet (higher edge fidelity than rembg on
+# fine detail/thin structures; noticeably heavier download and slower on CPU).
+torch
+torchvision
+transformers
