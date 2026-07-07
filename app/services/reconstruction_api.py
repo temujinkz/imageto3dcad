@@ -19,8 +19,16 @@ def reconstruct_from_images(
     output_dir.mkdir(parents=True, exist_ok=True)
     warnings: list[str] = []
 
-    if len(image_paths) > 1 or _is_video_source(image_paths):
-        for provider in _provider_order(settings):
+    is_multi_view = len(image_paths) > 1 or _is_video_source(image_paths)
+    if is_multi_view:
+        providers = _provider_order(settings)
+        if not providers:
+            warnings.append(
+                f"You provided {len(image_paths)} angle photos, but no multi-view reconstruction API "
+                "(Luma/CSM/Tripo/Meshy) is configured, so only the first photo was used. "
+                "Add one of those API keys to .env.local for a real multi-angle 3D reconstruction."
+            )
+        for provider in providers:
             result = _try_provider(provider, image_paths, output_dir, settings)
             if result:
                 result["warnings"] = warnings + result.get("warnings", [])
