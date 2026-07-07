@@ -11,6 +11,7 @@ type UploadCardProps = {
   error?: string | null;
   previewUrls: string[];
   isVideoPreview: boolean;
+  maskedImageUrl?: string | null;
   onMediaReady: (files: File[], video: File | null) => void;
   onReset: () => void;
 };
@@ -22,6 +23,7 @@ export function UploadCard({
   error,
   previewUrls,
   isVideoPreview,
+  maskedImageUrl,
   onMediaReady,
   onReset
 }: UploadCardProps) {
@@ -127,6 +129,17 @@ export function UploadCard({
                     <img src={url} alt={`Uploaded angle ${index + 1}`} className="h-full w-full object-contain" />
                   </div>
                 ))}
+              </div>
+            )}
+            {!isVideoPreview && maskedImageUrl && (
+              <div className="mx-auto mb-4 max-w-[220px]">
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Background removed
+                </p>
+                <div className="checkerboard flex aspect-square items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={maskedImageUrl} alt="Background removed preview" className="h-full w-full object-contain" />
+                </div>
               </div>
             )}
             <p className="text-sm font-medium text-slate-600">

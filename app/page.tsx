@@ -143,6 +143,7 @@ export default function Home() {
           error={error}
           previewUrls={previewUrls}
           isVideoPreview={isVideoPreview}
+          maskedImageUrl={upload?.masked_image_url}
           onMediaReady={handleMediaReady}
           onReset={handleReset}
         />
