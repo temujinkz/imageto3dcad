@@ -93,11 +93,17 @@ python3 -m uvicorn app.main:app --reload --port 8000
 ## Frontend: single-port mode vs. dev mode
 
 For active frontend development (hot reload), run the frontend and backend as
-two separate processes:
+two separate processes. `lib/api.ts` defaults to a relative/same-origin API
+base URL (so the single-port build below works on any port), so for this
+two-process workflow create `.env.local` with:
+
+```
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
 
 ```bash
 npm install
-npm run dev            # http://localhost:3000, proxies API calls to :8000
+npm run dev            # http://localhost:3000, calls the backend at :8000
 ```
 
 To run the whole app — frontend and API — from a single port instead, build

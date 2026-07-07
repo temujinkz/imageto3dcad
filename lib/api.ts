@@ -1,6 +1,11 @@
 import type { JobResponse, ProcessResponse, UploadResponse } from "@/lib/types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+// Defaults to a relative/same-origin base so the unified single-port build
+// (frontend served by the FastAPI backend, see app/main.py) works regardless
+// of which port that backend actually binds to. Override with
+// NEXT_PUBLIC_API_BASE_URL for the two-process hot-reload dev workflow
+// (npm run dev on :3000 talking to a backend on a different port).
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
 function extractErrorMessage(body: string): string {
   if (!body) return "";
