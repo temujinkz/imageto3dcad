@@ -8,6 +8,7 @@ pillow-heif
 opencv-python
 numpy
 rembg
+onnxruntime
 trimesh
 cadquery
 aiofiles
