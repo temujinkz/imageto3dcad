@@ -77,7 +77,9 @@ def build_router(store: JobStore, settings: Settings) -> APIRouter:
             if extra_paths:
                 store.update(job["job_id"], extra_image_paths=extra_paths)
 
-        _prepare_image(job["job_id"], store, settings)
+        prepared = _prepare_image(job["job_id"], store, settings)
+        if prepared["status"] == "failed":
+            raise HTTPException(status_code=400, detail=prepared.get("error") or "Could not read that file as an image.")
         for warning in warnings:
             store.append_warning(job["job_id"], warning)
 
@@ -224,12 +226,21 @@ def _prepare_image(job_id: str, store: JobStore, settings: Settings) -> dict:
     job = store.update(job_id, status="processing", progress=0.05, message="Removing background")
     masked_path = Path(job["masked_path"])
     options = job["options"]
-    warnings = create_masked_image(
-        input_path=input_path,
-        output_path=masked_path,
-        enable_background_removal=bool(options.get("background_removal", True)) and settings.enable_rembg,
-        backend=settings.background_removal_backend,
-    )
+    try:
+        warnings = create_masked_image(
+            input_path=input_path,
+            output_path=masked_path,
+            enable_background_removal=bool(options.get("background_removal", True)) and settings.enable_rembg,
+            backend=settings.background_removal_backend,
+        )
+    except Exception as exc:
+        return store.update(
+            job_id,
+            status="failed",
+            progress=1.0,
+            message="Upload failed",
+            error=f"Could not read that file as an image: {exc}",
+        )
     for warning in warnings:
         store.append_warning(job_id, warning)
     return store.update(
@@ -296,7 +307,9 @@ def _run_generation_job_unsafe(
     run_cad: bool,
     run_freecad: bool = True,
 ) -> dict:
-    _prepare_image(job_id, store, settings)
+    prepared = _prepare_image(job_id, store, settings)
+    if prepared["status"] == "failed":
+        return prepared
     job = store.update(job_id, status="processing", progress=0.2, message="Starting 3D reconstruction")
     masked_path = Path(job["masked_path"])
     options = job["options"]

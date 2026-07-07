@@ -2,6 +2,21 @@ import type { JobResponse, ProcessResponse, UploadResponse } from "@/lib/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
+function extractErrorMessage(body: string): string {
+  if (!body) return "";
+  try {
+    const parsed = JSON.parse(body);
+    const detail = parsed?.detail;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) {
+      return detail.map((item) => item?.msg ?? JSON.stringify(item)).join("; ");
+    }
+    return body;
+  } catch {
+    return body;
+  }
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -13,7 +28,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    throw new Error(body || `Request failed with status ${response.status}`);
+    throw new Error(extractErrorMessage(body) || `Request failed with status ${response.status}`);
   }
 
   return response.json() as Promise<T>;
