@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+python-multipart
+pydantic
+pillow
+opencv-python
+numpy
+rembg
+trimesh
+cadquery
+aiofiles
+ezdxf
