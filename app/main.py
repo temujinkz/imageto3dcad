@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import importlib.util
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
 from .jobs import JobStore
@@ -64,3 +66,12 @@ def capabilities() -> dict:
         "supported_image_formats": sorted(SUPPORTED_EXTENSIONS),
         "supported_video_formats": sorted(VIDEO_EXTENSIONS),
     }
+
+
+# Serves the Next.js static export (`npm run build`, see next.config.ts) so the
+# whole app runs from this one process/port instead of a separate frontend
+# dev server. Mounted last so it never shadows the /api/* and /health routes
+# registered above. A no-op if the frontend hasn't been built yet.
+_FRONTEND_EXPORT_DIR = Path(__file__).resolve().parents[1] / "out"
+if _FRONTEND_EXPORT_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=str(_FRONTEND_EXPORT_DIR), html=True), name="frontend")

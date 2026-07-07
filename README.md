@@ -84,12 +84,34 @@ Each job can create:
 ## Run
 
 ```bash
-cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python3 -m uvicorn app.main:app --reload --port 8000
 ```
+
+## Frontend: single-port mode vs. dev mode
+
+For active frontend development (hot reload), run the frontend and backend as
+two separate processes:
+
+```bash
+npm install
+npm run dev            # http://localhost:3000, proxies API calls to :8000
+```
+
+To run the whole app — frontend and API — from a single port instead, build
+a static export once and let the backend serve it directly:
+
+```bash
+npm run build           # writes the static export to ./out
+python3 -m uvicorn app.main:app --port 8000
+# open http://localhost:8000 — frontend and API both live here
+```
+
+`app/main.py` mounts `./out` (if present) after all `/api/*` routes, so API
+routes always take priority over the static files. Rebuild with
+`npm run build` after any frontend change to pick it up in this mode.
 
 ## TripoSR
 
