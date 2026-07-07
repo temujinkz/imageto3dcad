@@ -3,3 +3,15 @@ __pycache__/
 .pytest_cache/
 .venv/
 storage/jobs/
+.DS_Store
+node_modules/
+.next/
+out/
+
+.env
+.env*.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
