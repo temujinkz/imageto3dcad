@@ -82,7 +82,15 @@ export async function normalizeMediaFiles(files: File[]): Promise<File[]> {
       normalized.push(file);
       continue;
     }
-    normalized.push(await normalizeToPng(file));
+    try {
+      normalized.push(await normalizeToPng(file));
+    } catch {
+      // Client-side HEIC/canvas conversion (heic2any, createImageBitmap) can
+      // fail on real-world files in ways that aren't worth blocking the
+      // upload over - the backend converts formats itself and is more
+      // robust, so just hand it the original file instead.
+      normalized.push(file);
+    }
   }
   return normalized;
 }
