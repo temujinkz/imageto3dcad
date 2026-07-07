@@ -18,23 +18,20 @@ from ..services.mesh_service import generate_mesh_assets
 def build_router(store: JobStore, settings: Settings) -> APIRouter:
     router = APIRouter(tags=["jobs"])
 
-    @router.post("/jobs", response_model=JobAcceptedResponse, status_code=202)
-    async def create_job(
+    @router.post("/upload-image", response_model=JobAcceptedResponse, status_code=202)
+    async def upload_image(
         request: Request,
         image: UploadFile = File(...),
-        mode: str = Form("both"),
         background_removal: bool = Form(True),
         known_width_mm: float | None = Form(None),
         known_height_mm: float | None = Form(None),
         thickness_mm: float | None = Form(None),
     ) -> JobAcceptedResponse:
-        if mode not in {"mesh", "cad", "both"}:
-            raise HTTPException(status_code=400, detail="mode must be mesh, cad, or both")
         if not image.filename:
             raise HTTPException(status_code=400, detail="Missing file name")
 
         job = store.create_job(
-            mode=mode,
+            mode="upload",
             filename=image.filename,
             options={
                 "background_removal": background_removal,
@@ -44,17 +41,43 @@ def build_router(store: JobStore, settings: Settings) -> APIRouter:
             },
         )
         _save_upload_as_png(image, Path(job["input_path"]))
-        thread = threading.Thread(
-            target=_process_job,
-            args=(store, settings, job["job_id"]),
-            daemon=True,
+        _prepare_image(job["job_id"], store, settings)
+        return JobAcceptedResponse(
+            job_id=job["job_id"],
+            status="completed",
+            progress=0.1,
+            message="Image uploaded and prepared",
+            status_url=str(request.url_for("get_job", job_id=job["job_id"])),
         )
-        thread.start()
+
+    @router.post("/jobs", response_model=JobAcceptedResponse, status_code=202)
+    async def create_job_and_run_all(
+        request: Request,
+        image: UploadFile = File(...),
+        background_removal: bool = Form(True),
+        known_width_mm: float | None = Form(None),
+        known_height_mm: float | None = Form(None),
+        thickness_mm: float | None = Form(None),
+    ) -> JobAcceptedResponse:
+        if not image.filename:
+            raise HTTPException(status_code=400, detail="Missing file name")
+        job = store.create_job(
+            mode="both",
+            filename=image.filename,
+            options={
+                "background_removal": background_removal,
+                "known_width_mm": known_width_mm,
+                "known_height_mm": known_height_mm,
+                "thickness_mm": thickness_mm,
+            },
+        )
+        _save_upload_as_png(image, Path(job["input_path"]))
+        _start_thread(store, settings, job["job_id"], run_mesh=True, run_cad=True)
         return JobAcceptedResponse(
             job_id=job["job_id"],
             status="queued",
             progress=0.0,
-            message="Job queued",
+            message="Image uploaded. Mesh and CAD generation queued.",
             status_url=str(request.url_for("get_job", job_id=job["job_id"])),
         )
 
@@ -79,7 +102,16 @@ def _save_upload_as_png(upload: UploadFile, destination: Path) -> None:
     temp_path.unlink(missing_ok=True)
 
 
-def _process_job(store: JobStore, settings: Settings, job_id: str) -> None:
+def _prepare_image(job_id: str, store: JobStore, settings: Settings) -> dict:
+    job = store.get(job_id)
+    if job is None:
+        raise ValueError("Invalid job ID")
+    input_path = Path(job["input_path"])
+    if not input_path.exists():
+        raise ValueError("Missing file")
+    if Path(job["masked_path"]).exists():
+        return job
+
     job = store.update(job_id, status="processing", progress=0.05, message="Preparing image")
     input_path = Path(job["input_path"])
     masked_path = Path(job["masked_path"])
@@ -91,18 +123,52 @@ def _process_job(store: JobStore, settings: Settings, job_id: str) -> None:
     )
     for warning in warnings:
         store.append_warning(job_id, warning)
+    return store.update(
+        job_id,
+        status="completed",
+        progress=max(float(job["progress"]), 0.1),
+        message="Image uploaded and prepared",
+    )
 
+
+def _start_thread(
+    store: JobStore,
+    settings: Settings,
+    job_id: str,
+    *,
+    run_mesh: bool,
+    run_cad: bool,
+) -> None:
+    thread = threading.Thread(
+        target=_process_job,
+        args=(store, settings, job_id, run_mesh, run_cad),
+        daemon=True,
+    )
+    thread.start()
+
+
+def _process_job(
+    store: JobStore,
+    settings: Settings,
+    job_id: str,
+    run_mesh: bool,
+    run_cad: bool,
+) -> None:
+    _prepare_image(job_id, store, settings)
+    job = store.update(job_id, status="processing", progress=0.15, message="Starting generation")
+    masked_path = Path(job["masked_path"])
+    options = job["options"]
     known_width_mm = options.get("known_width_mm")
     known_height_mm = options.get("known_height_mm")
     thickness_mm = float(options.get("thickness_mm") or settings.default_thickness_mm)
 
     try:
-        outputs: dict[str, str] = {}
-        cad_summary = None
-        preview_model_path = None
+        outputs = dict(job.get("outputs", {}))
+        cad_summary = job.get("cad_summary")
+        preview_model_path = job.get("preview_model_path")
 
-        if job["mode"] in {"mesh", "both"}:
-            store.update(job_id, progress=0.35, message="Generating mesh")
+        if run_mesh:
+            store.update(job_id, progress=0.4 if run_cad else 0.5, message="Generating mesh")
             mesh = generate_mesh_assets(
                 image_path=masked_path,
                 output_dir=Path(job["job_dir"]),
@@ -126,8 +192,12 @@ def _process_job(store: JobStore, settings: Settings, job_id: str) -> None:
             )
             preview_model_path = mesh.get("preview_model_path")
 
-        if job["mode"] in {"cad", "both"}:
-            store.update(job_id, progress=0.7 if job["mode"] == "both" else 0.35, message="Generating CAD")
+        if run_cad:
+            store.update(
+                job_id,
+                progress=0.75 if run_mesh else 0.5,
+                message="Generating CAD",
+            )
             cad = generate_flat_part_cad(
                 image_path=masked_path,
                 output_dir=Path(job["job_dir"]),
@@ -157,9 +227,11 @@ def _process_job(store: JobStore, settings: Settings, job_id: str) -> None:
             job_id,
             status="completed",
             progress=1.0,
-            message="Job completed",
+            message=_completion_message(run_mesh=run_mesh, run_cad=run_cad),
             cad_summary=cad_summary,
             preview_model_path=preview_model_path,
+            mode=_result_mode(run_mesh=run_mesh, run_cad=run_cad, current_mode=job["mode"]),
+            error=None,
         )
     except Exception as exc:
         store.update(
@@ -169,6 +241,30 @@ def _process_job(store: JobStore, settings: Settings, job_id: str) -> None:
             message="Processing failed",
             error=str(exc),
         )
+
+
+def _result_mode(*, run_mesh: bool, run_cad: bool, current_mode: str) -> str:
+    if run_mesh and run_cad:
+        return "both"
+    if run_mesh and current_mode == "cad":
+        return "both"
+    if run_cad and current_mode == "mesh":
+        return "both"
+    if run_mesh:
+        return "mesh" if current_mode == "upload" else current_mode
+    if run_cad:
+        return "cad" if current_mode == "upload" else current_mode
+    return current_mode
+
+
+def _completion_message(*, run_mesh: bool, run_cad: bool) -> str:
+    if run_mesh and run_cad:
+        return "Mesh and CAD generation completed"
+    if run_mesh:
+        return "Mesh generation completed"
+    if run_cad:
+        return "CAD generation completed"
+    return "Job completed"
 
 
 def _serialize_job(job: dict, request: Request, settings: Settings) -> JobStatusResponse:

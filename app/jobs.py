@@ -64,7 +64,8 @@ class JobStore:
 
     def append_warning(self, job_id: str, warning: str) -> None:
         with self._lock:
-            self._jobs[job_id]["warnings"].append(warning)
+            if warning not in self._jobs[job_id]["warnings"]:
+                self._jobs[job_id]["warnings"].append(warning)
             self._jobs[job_id]["updated_at"] = utcnow()
         self._persist(job_id)
 

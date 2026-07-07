@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 
 JobStatus = Literal["queued", "processing", "completed", "failed"]
-Mode = Literal["mesh", "cad", "both"]
+Mode = Literal["upload", "mesh", "cad", "both"]
 
 
 class DimensionsMm(BaseModel):

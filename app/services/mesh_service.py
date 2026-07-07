@@ -43,6 +43,24 @@ def generate_mesh_assets(
             "geometry": geometry,
         }
 
+    cadquery_fallback = _generate_cadquery_fallback_mesh(
+        output_dir=output_dir,
+        width_mm=float(geometry["estimated_dimensions_mm"]["width"]),
+        height_mm=float(geometry["estimated_dimensions_mm"]["height"]),
+        thickness_mm=thickness_value,
+        holes=geometry.get("holes", []),
+        bbox=geometry.get("bounding_box", {}),
+    )
+    if cadquery_fallback is not None:
+        cadquery_fallback["warnings"] = (
+            warnings
+            + tripo.get("warnings", [])
+            + ["TripoSR failed, using simple CadQuery-generated fallback mesh."]
+            + cadquery_fallback.get("warnings", [])
+        )
+        cadquery_fallback["geometry"] = geometry
+        return cadquery_fallback
+
     fallback = _generate_fallback_mesh(
         image_path=Path(image_path),
         output_dir=output_dir,
@@ -53,6 +71,53 @@ def generate_mesh_assets(
     fallback["warnings"] = warnings + tripo.get("warnings", []) + fallback.get("warnings", [])
     fallback["geometry"] = geometry
     return fallback
+
+
+def _generate_cadquery_fallback_mesh(
+    output_dir: Path,
+    width_mm: float,
+    height_mm: float,
+    thickness_mm: float,
+    holes: list[dict],
+    bbox: dict,
+) -> dict | None:
+    try:
+        cadquery = importlib.import_module("cadquery")
+    except Exception:
+        return None
+
+    stl_path = output_dir / "mesh.stl"
+    model = cadquery.Workplane("XY").box(width_mm, height_mm, thickness_mm)
+    points, diameter = _hole_points_in_mm(holes, bbox, width_mm, height_mm)
+    if points:
+        model = model.faces(">Z").workplane().pushPoints(points).hole(diameter)
+
+    try:
+        cadquery.exporters.export(model, str(stl_path))
+    except Exception:
+        return None
+
+    result = {
+        "source": "cadquery-fallback",
+        "stl_path": str(stl_path),
+        "obj_path": None,
+        "glb_path": None,
+        "preview_model_path": str(stl_path),
+        "warnings": [],
+    }
+    try:
+        trimesh = importlib.import_module("trimesh")
+        mesh = trimesh.load_mesh(stl_path, force="mesh")
+        obj_path = output_dir / "mesh.obj"
+        glb_path = output_dir / "mesh.glb"
+        mesh.export(obj_path)
+        mesh.export(glb_path)
+        result["obj_path"] = str(obj_path)
+        result["glb_path"] = str(glb_path)
+        result["preview_model_path"] = str(glb_path)
+    except Exception:
+        result["warnings"].append("Trimesh unavailable, preview falls back to STL only.")
+    return result
 
 
 def _generate_fallback_mesh(
@@ -101,6 +166,26 @@ def _load_binary_mask(image_path: Path) -> np.ndarray:
     if alpha.max() > 8:
         return alpha > 16
     return np.mean(array[:, :, :3], axis=2) < 245
+
+
+def _hole_points_in_mm(
+    holes: list[dict],
+    bbox: dict,
+    width_mm: float,
+    height_mm: float,
+) -> tuple[list[tuple[float, float]], float]:
+    bbox_width = max(float(bbox.get("width", 1.0)), 1.0)
+    bbox_height = max(float(bbox.get("height", 1.0)), 1.0)
+    points: list[tuple[float, float]] = []
+    diameters: list[float] = []
+    for hole in holes:
+        center_x_px, center_y_px = hole["center_px"]
+        radius_px = float(hole["radius_px"])
+        x = ((center_x_px - (bbox_width / 2)) / bbox_width) * width_mm
+        y = (((bbox_height / 2) - center_y_px) / bbox_height) * height_mm
+        points.append((round(x, 2), round(y, 2)))
+        diameters.append(max((radius_px * 2 / bbox_width) * width_mm, 1.0))
+    return points, min(diameters) if diameters else 0.0
 
 
 def _voxel_mesh(mask: np.ndarray, max_dimension_mm: float, thickness_mm: float):
