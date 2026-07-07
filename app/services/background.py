@@ -38,7 +38,8 @@ def create_masked_image(
     backend: str = "rembg",
 ) -> list[str]:
     warnings: list[str] = []
-    image = Image.open(input_path).convert("RGBA")
+    original = Image.open(input_path).convert("RGBA")
+    image = original
 
     if enable_background_removal:
         remover = _remove_background_birefnet if backend == "birefnet" else _remove_background_rembg
@@ -51,10 +52,20 @@ def create_masked_image(
                     image = _remove_background_rembg(image)
                 except Exception as fallback_exc:
                     warnings.append(f"Background removal skipped: {fallback_exc}")
+                    image = original
             else:
                 warnings.append(f"Background removal skipped: {exc}")
+                image = original
 
-        warnings.extend(_check_mask_sanity(image))
+        sanity_warning = _mask_sanity_warning(image)
+        if sanity_warning:
+            # The model erased the subject along with the background (common
+            # on transparent/glass/reflective objects, where there's no clean
+            # edge for it to find) or kept almost the whole frame. Either way
+            # the removal did more harm than good, so use the original photo
+            # instead of handing the reconstruction an empty/unmasked image.
+            warnings.append(f"{sanity_warning} Using the original photo without background removal instead.")
+            image = original
 
     image = isolate_on_padded_canvas(image)
     image.save(output_path)
@@ -99,18 +110,18 @@ def _remove_background_birefnet(image: Image.Image) -> Image.Image:
     return output
 
 
-def _check_mask_sanity(image: Image.Image) -> list[str]:
-    """Flag likely-failed segmentation: if the foreground mask covers almost
-    the entire frame or almost none of it, background removal probably did
-    not find the subject, and the reconstruction will incorporate background
-    noise (or nothing) instead of the isolated object."""
+def _mask_sanity_warning(image: Image.Image) -> str | None:
+    """Detects likely-failed segmentation: if the foreground mask covers
+    almost the entire frame or almost none of it, background removal didn't
+    find a sensible subject boundary (common on transparent, glass, or
+    reflective objects where there's no solid edge to detect)."""
     alpha = np.array(image.split()[-1])
     foreground_ratio = float((alpha > 8).mean())
     if foreground_ratio > 0.98:
-        return ["Background removal may have failed: the mask covers almost the entire frame."]
-    if foreground_ratio < 0.01:
-        return ["Background removal may have failed: little to no foreground subject was detected."]
-    return []
+        return "Background removal may have failed: the mask covers almost the entire frame."
+    if foreground_ratio < 0.02:
+        return "Background removal may have failed: little to no foreground subject was detected."
+    return None
 
 
 def isolate_on_padded_canvas(image: Image.Image, padding_ratio: float = 0.12) -> Image.Image:
