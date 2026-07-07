@@ -118,6 +118,16 @@ export function UploadCard({
               <div className="mx-auto mb-4 flex max-h-[320px] max-w-full items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-black">
                 <video src={previewUrls[0]} controls className="max-h-[320px] w-full" />
               </div>
+            ) : maskedImageUrl ? (
+              <div className="mx-auto mb-4 max-w-[260px]">
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Background removed
+                </p>
+                <div className="checkerboard flex aspect-square items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={maskedImageUrl} alt="Background removed preview" className="h-full w-full object-contain" />
+                </div>
+              </div>
             ) : (
               <div className="mx-auto mb-4 grid max-w-full grid-cols-2 gap-3 sm:grid-cols-4">
                 {previewUrls.slice(0, 8).map((url, index) => (
@@ -129,17 +139,6 @@ export function UploadCard({
                     <img src={url} alt={`Uploaded angle ${index + 1}`} className="h-full w-full object-contain" />
                   </div>
                 ))}
-              </div>
-            )}
-            {!isVideoPreview && maskedImageUrl && (
-              <div className="mx-auto mb-4 max-w-[220px]">
-                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Background removed
-                </p>
-                <div className="checkerboard flex aspect-square items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={maskedImageUrl} alt="Background removed preview" className="h-full w-full object-contain" />
-                </div>
               </div>
             )}
             <p className="text-sm font-medium text-slate-600">
