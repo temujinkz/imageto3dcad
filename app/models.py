@@ -30,6 +30,24 @@ class JobAcceptedResponse(BaseModel):
     status_url: str
 
 
+class UploadImageResponse(BaseModel):
+    job_id: str
+    image_url: str
+    masked_image_url: str | None = None
+
+
+class GenerateMeshRequest(BaseModel):
+    job_id: str
+
+
+class GenerateCadRequest(BaseModel):
+    job_id: str
+    known_width_mm: float | None = None
+    known_height_mm: float | None = None
+    thickness_mm: float | None = None
+    mode: str | None = None
+
+
 class JobStatusResponse(BaseModel):
     job_id: str
     status: JobStatus

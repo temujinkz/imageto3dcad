@@ -9,7 +9,7 @@ from PIL import Image
 
 from ..config import Settings
 from ..jobs import JobStore
-from ..models import JobAcceptedResponse, JobStatusResponse
+from ..models import JobAcceptedResponse, JobStatusResponse, UploadImageResponse
 from ..services.background import create_masked_image
 from ..services.cad_service import generate_flat_part_cad
 from ..services.mesh_service import generate_mesh_assets
@@ -48,6 +48,42 @@ def build_router(store: JobStore, settings: Settings) -> APIRouter:
             progress=0.1,
             message="Image uploaded and prepared",
             status_url=str(request.url_for("get_job", job_id=job["job_id"])),
+        )
+
+    @router.post("/upload", response_model=UploadImageResponse, status_code=200)
+    async def upload_image_legacy(
+        request: Request,
+        image: UploadFile = File(...),
+        background_removal: bool = Form(True),
+        known_width_mm: float | None = Form(None),
+        known_height_mm: float | None = Form(None),
+        thickness_mm: float | None = Form(None),
+    ) -> UploadImageResponse:
+        if not image.filename:
+            raise HTTPException(status_code=400, detail="Missing file name")
+
+        job = store.create_job(
+            mode="upload",
+            filename=image.filename,
+            options={
+                "background_removal": background_removal,
+                "known_width_mm": known_width_mm,
+                "known_height_mm": known_height_mm,
+                "thickness_mm": thickness_mm,
+            },
+        )
+        _save_upload_as_png(image, Path(job["input_path"]))
+        _prepare_image(job["job_id"], store, settings)
+        saved = store.get(job["job_id"])
+        if saved is None:
+            raise HTTPException(status_code=500, detail="Image processing failed")
+
+        return UploadImageResponse(
+            job_id=job["job_id"],
+            image_url=_file_url(job["job_id"], "input.png", request, settings),
+            masked_image_url=_file_url(job["job_id"], "masked.png", request, settings)
+            if Path(saved["masked_path"]).exists()
+            else None,
         )
 
     @router.post("/jobs", response_model=JobAcceptedResponse, status_code=202)
@@ -147,13 +183,14 @@ def _start_thread(
     thread.start()
 
 
-def _process_job(
+def _run_generation_job(
     store: JobStore,
     settings: Settings,
     job_id: str,
+    *,
     run_mesh: bool,
     run_cad: bool,
-) -> None:
+) -> dict:
     _prepare_image(job_id, store, settings)
     job = store.update(job_id, status="processing", progress=0.15, message="Starting generation")
     masked_path = Path(job["masked_path"])
@@ -162,76 +199,92 @@ def _process_job(
     known_height_mm = options.get("known_height_mm")
     thickness_mm = float(options.get("thickness_mm") or settings.default_thickness_mm)
 
-    try:
-        outputs = dict(job.get("outputs", {}))
-        cad_summary = job.get("cad_summary")
-        preview_model_path = job.get("preview_model_path")
+    outputs = dict(job.get("outputs", {}))
+    cad_summary = job.get("cad_summary")
+    preview_model_path = job.get("preview_model_path")
 
-        if run_mesh:
-            store.update(job_id, progress=0.4 if run_cad else 0.5, message="Generating mesh")
-            mesh = generate_mesh_assets(
-                image_path=masked_path,
-                output_dir=Path(job["job_dir"]),
-                settings=settings,
-                known_width_mm=known_width_mm,
-                known_height_mm=known_height_mm,
-                thickness_mm=thickness_mm,
-            )
-            for warning in mesh.get("warnings", []):
-                store.append_warning(job_id, warning)
-            outputs.update(
-                {
-                    key: value
-                    for key, value in {
-                        "mesh.stl": mesh.get("stl_path"),
-                        "mesh.obj": mesh.get("obj_path"),
-                        "mesh.glb": mesh.get("glb_path"),
-                    }.items()
-                    if value
-                }
-            )
-            preview_model_path = mesh.get("preview_model_path")
+    if run_mesh:
+        job = store.update(job_id, progress=0.4 if run_cad else 0.5, message="Generating mesh")
+        mesh = generate_mesh_assets(
+            image_path=masked_path,
+            output_dir=Path(job["job_dir"]),
+            settings=settings,
+            known_width_mm=known_width_mm,
+            known_height_mm=known_height_mm,
+            thickness_mm=thickness_mm,
+        )
+        for warning in mesh.get("warnings", []):
+            store.append_warning(job_id, warning)
+        outputs.update(
+            {
+                key: value
+                for key, value in {
+                    "mesh.stl": mesh.get("stl_path"),
+                    "mesh.obj": mesh.get("obj_path"),
+                    "mesh.glb": mesh.get("glb_path"),
+                }.items()
+                if value
+            }
+        )
+        preview_model_path = mesh.get("preview_model_path") or preview_model_path
 
-        if run_cad:
-            store.update(
-                job_id,
-                progress=0.75 if run_mesh else 0.5,
-                message="Generating CAD",
-            )
-            cad = generate_flat_part_cad(
-                image_path=masked_path,
-                output_dir=Path(job["job_dir"]),
-                known_width_mm=known_width_mm,
-                known_height_mm=known_height_mm,
-                thickness_mm=thickness_mm,
-                settings=settings,
-            )
-            for warning in cad.get("warnings", []):
-                store.append_warning(job_id, warning)
-            outputs.update(
-                {
-                    key: value
-                    for key, value in {
-                        "cad.step": cad.get("step_path"),
-                        "cad.stl": cad.get("stl_path"),
-                        "cad.dxf": cad.get("dxf_path"),
-                    }.items()
-                    if value
-                }
-            )
-            cad_summary = cad.get("cad_summary")
-            preview_model_path = preview_model_path or cad.get("preview_model_path")
-
-        store.set_outputs(job_id, outputs)
-        store.update(
+    if run_cad:
+        job = store.update(
             job_id,
-            status="completed",
-            progress=1.0,
-            message=_completion_message(run_mesh=run_mesh, run_cad=run_cad),
-            cad_summary=cad_summary,
-            preview_model_path=preview_model_path,
-            mode=_result_mode(run_mesh=run_mesh, run_cad=run_cad, current_mode=job["mode"]),
-            error=None,
+            progress=0.75 if run_mesh else 0.5,
+            message="Generating CAD",
+        )
+        cad = generate_flat_part_cad(
+            image_path=masked_path,
+            output_dir=Path(job["job_dir"]),
+            known_width_mm=known_width_mm,
+            known_height_mm=known_height_mm,
+            thickness_mm=thickness_mm,
+            settings=settings,
+        )
+        for warning in cad.get("warnings", []):
+            store.append_warning(job_id, warning)
+        outputs.update(
+            {
+                key: value
+                for key, value in {
+                    "cad.step": cad.get("step_path"),
+                    "cad.stl": cad.get("stl_path"),
+                    "cad.dxf": cad.get("dxf_path"),
+                }.items()
+                if value
+            }
+        )
+        cad_summary = cad.get("cad_summary")
+        preview_model_path = preview_model_path or cad.get("preview_model_path")
+
+    store.set_outputs(job_id, outputs)
+    return store.update(
+        job_id,
+        status="completed",
+        progress=1.0,
+        message=_completion_message(run_mesh=run_mesh, run_cad=run_cad),
+        cad_summary=cad_summary,
+        preview_model_path=preview_model_path,
+        mode=_result_mode(run_mesh=run_mesh, run_cad=run_cad, current_mode=job["mode"]),
+        error=None,
+    )
+
+
+def _process_job(
+    store: JobStore,
+    settings: Settings,
+    job_id: str,
+    run_mesh: bool,
+    run_cad: bool,
+) -> None:
+    try:
+        _run_generation_job(
+            store,
+            settings,
+            job_id,
+            run_mesh=run_mesh,
+            run_cad=run_cad,
         )
     except Exception as exc:
         store.update(
