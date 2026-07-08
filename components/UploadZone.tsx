@@ -114,15 +114,27 @@ export function UploadZone({
             <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5">
               {previewUrls.slice(0, 10).map((url, index) => (
                 <div
-                  key={url}
+                  key={`preview-${index}`}
                   className="group relative aspect-square overflow-hidden rounded-xl border border-line bg-bone transition duration-200 hover:-translate-y-1 hover:border-accent/40 hover:shadow-md"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={url}
-                    alt={`Angle ${index + 1}`}
-                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
-                  />
+                  {url ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={url}
+                        alt={`Angle ${index + 1}`}
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
+                        onError={(event) => {
+                          event.currentTarget.style.display = "none";
+                        }}
+                      />
+                    </>
+                  ) : (
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted">
+                      <ImagePlus className="h-5 w-5" aria-hidden />
+                      <span className="text-[11px] font-medium">Photo {index + 1}</span>
+                    </div>
+                  )}
                 </div>
               ))}
               {!busy && (

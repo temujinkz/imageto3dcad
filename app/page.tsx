@@ -6,6 +6,7 @@ import { ModelViewer } from "@/components/ModelViewer";
 import { UploadZone } from "@/components/UploadZone";
 import { Typer } from "@/components/ui/Typer";
 import { processJob, uploadMedia } from "@/lib/api";
+import { createPreviewThumbnails } from "@/lib/imageConvert";
 import type { PipelineResult } from "@/lib/types";
 
 const failureMessage = "Generation failed. Try clearer photos of a simple object, ideally a few angles.";
@@ -19,39 +20,48 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState("Generating");
   const [error, setError] = useState<string | null>(null);
-  const previewUrlsRef = useRef<string[]>([]);
+  // Only video previews use a revocable object URL; image previews are data
+  // URLs (see createPreviewThumbnails) so there is no lifecycle to manage.
+  const videoUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
-    previewUrlsRef.current = previewUrls;
-  }, [previewUrls]);
-
-  useEffect(() => {
-    return () => previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    return () => {
+      if (videoUrlRef.current) URL.revokeObjectURL(videoUrlRef.current);
+    };
   }, []);
 
-  function revokePreviews() {
-    previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+  function revokeVideoUrl() {
+    if (videoUrlRef.current) {
+      URL.revokeObjectURL(videoUrlRef.current);
+      videoUrlRef.current = null;
+    }
   }
 
-  function handleFilesReady(nextFiles: File[], nextVideo: File | null) {
-    revokePreviews();
+  async function handleFilesReady(nextFiles: File[], nextVideo: File | null) {
+    revokeVideoUrl();
     setResult(null);
     setError(null);
     if (nextVideo) {
+      const url = URL.createObjectURL(nextVideo);
+      videoUrlRef.current = url;
       setVideo(nextVideo);
       setFiles([]);
       setIsVideo(true);
-      setPreviewUrls([URL.createObjectURL(nextVideo)]);
+      setPreviewUrls([url]);
     } else {
       setVideo(null);
       setFiles(nextFiles);
       setIsVideo(false);
-      setPreviewUrls(nextFiles.map((file) => URL.createObjectURL(file)));
+      // Show something immediately, then swap in decoded thumbnails so HEIC and
+      // other formats render instead of appearing as blank white squares.
+      setPreviewUrls(nextFiles.map(() => ""));
+      const thumbs = await createPreviewThumbnails(nextFiles);
+      setPreviewUrls(thumbs.map((thumb) => thumb ?? ""));
     }
   }
 
   function handleReset() {
-    revokePreviews();
+    revokeVideoUrl();
     setFiles([]);
     setVideo(null);
     setPreviewUrls([]);
@@ -115,6 +125,7 @@ export default function Home() {
               modelUrl={result?.previewModelUrl}
               meshSource={result?.meshSource}
               meshIsHighFidelity={result?.meshIsHighFidelity}
+              warnings={result?.warnings}
               busy={busy}
               busyLabel={busyLabel}
             />

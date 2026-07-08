@@ -75,6 +75,48 @@ export async function normalizeToPng(file: File): Promise<File> {
   return file;
 }
 
+async function decodeToBitmap(file: File): Promise<ImageBitmap> {
+  const extension = extensionOf(file);
+  if (HEIC_EXTENSIONS.has(extension) || file.type === "image/heic" || file.type === "image/heif") {
+    const heic2any = (await import("heic2any")).default;
+    const converted = await heic2any({ blob: file, toType: "image/png" });
+    const blob = Array.isArray(converted) ? converted[0] : converted;
+    return createImageBitmap(blob);
+  }
+  return createImageBitmap(file);
+}
+
+// Builds a small, guaranteed-renderable JPEG data URL for the upload preview.
+// Uses a data URL (not a blob: URL) so there is no object-URL lifecycle to
+// mismanage, and decodes HEIC first so iPhone photos never render as a blank
+// white square in an <img> tag. Returns null if the file cannot be decoded at
+// all (the UI then shows a labeled placeholder instead of a broken image).
+export async function createPreviewThumbnail(file: File, maxSize = 512): Promise<string | null> {
+  try {
+    const bitmap = await decodeToBitmap(file);
+    const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height, 1));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      bitmap.close();
+      return null;
+    }
+    context.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+    return canvas.toDataURL("image/jpeg", 0.82);
+  } catch {
+    return null;
+  }
+}
+
+export async function createPreviewThumbnails(files: File[]): Promise<(string | null)[]> {
+  return Promise.all(files.map((file) => createPreviewThumbnail(file)));
+}
+
 export async function normalizeMediaFiles(files: File[]): Promise<File[]> {
   const normalized: File[] = [];
   for (const file of files) {
