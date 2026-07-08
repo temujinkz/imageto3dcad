@@ -39,6 +39,7 @@ export type ProcessResponse = {
   progress: number;
   message: string;
   preview_model_url?: string;
+  full_model_url?: string;
   files: MeshFiles & CadFiles & {
     freecad_step?: string;
     freecad_obj?: string;
@@ -56,6 +57,7 @@ export type JobResponse = {
   progress: number;
   message: string;
   preview_model_url?: string;
+  full_model_url?: string;
   files?: ProcessResponse["files"];
   freecad?: FreeCADFiles;
   warnings?: string[];
@@ -75,6 +77,7 @@ export type WorkflowStep =
 
 export type PipelineResult = {
   previewModelUrl?: string;
+  fullModelUrl?: string;
   files: ProcessResponse["files"];
   freecad?: FreeCADFiles;
   cadSummary?: CadSummary;

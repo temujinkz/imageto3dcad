@@ -389,6 +389,7 @@ def _run_generation_job_unsafe(
                     "mesh.stl": mesh.get("stl_path"),
                     "mesh.obj": mesh.get("obj_path"),
                     "mesh.glb": mesh.get("glb_path"),
+                    "mesh_preview.glb": mesh.get("proxy_glb_path"),
                 }.items()
                 if value
             }
@@ -551,6 +552,7 @@ def _serialize_process(job: dict, request: Request, settings: Settings) -> Proce
         progress=serialized.progress,
         message=serialized.message,
         preview_model_url=serialized.preview_model_url,
+        full_model_url=serialized.full_model_url,
         files=serialized.files,
         cad_summary=serialized.cad_summary,
         warnings=serialized.warnings,
@@ -596,6 +598,10 @@ def _serialize_job(job: dict, request: Request, settings: Settings) -> JobStatus
             settings,
         )
 
+    # Full-resolution textured model, loaded in the background by the viewer to
+    # replace the lightweight proxy once ready.
+    full_model_url = files.get("glb")
+
     freecad_urls: dict[str, str] = {}
     if "freecad.step" in outputs:
         freecad_urls["step"] = _file_url(job["job_id"], "freecad.step", request, settings)
@@ -616,6 +622,7 @@ def _serialize_job(job: dict, request: Request, settings: Settings) -> JobStatus
         message=job["message"],
         created_at=job["created_at"],
         preview_model_url=preview_model_url,
+        full_model_url=full_model_url,
         files=files,
         cad_summary=job.get("cad_summary"),
         warnings=job.get("warnings", []),

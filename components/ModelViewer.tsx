@@ -1,17 +1,19 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Bounds, Center, Html, OrbitControls, useGLTF } from "@react-three/drei";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { useLoader } from "@react-three/fiber";
-import { Box, RotateCcw } from "lucide-react";
+import { Box, RotateCcw, Sparkles } from "lucide-react";
 import * as THREE from "three";
 import { BouncingLogo } from "@/components/BouncingLogo";
 
 type ModelViewerProps = {
   modelUrl?: string;
+  fullModelUrl?: string;
   meshIsHighFidelity?: boolean;
   warnings?: string[];
   busy?: boolean;
@@ -33,11 +35,22 @@ function qualityNote(warnings?: string[]): string | null {
   return null;
 }
 
-export function ModelViewer({ modelUrl, meshIsHighFidelity, warnings, busy, busyLabel }: ModelViewerProps) {
+export function ModelViewer({ modelUrl, fullModelUrl, meshIsHighFidelity, warnings, busy, busyLabel }: ModelViewerProps) {
   const [resetKey, setResetKey] = useState(0);
+  const [fullReady, setFullReady] = useState(false);
   const extension = modelUrl?.split("?")[0].split(".").pop()?.toLowerCase();
   const canPreview = Boolean(modelUrl && ["glb", "gltf", "obj", "stl"].includes(extension ?? ""));
   const note = meshIsHighFidelity ? null : qualityNote(warnings);
+  // A distinct full-res URL means we're showing the fast proxy first and
+  // upgrading to the textured mesh in the background.
+  const hasUpgrade = Boolean(fullModelUrl && fullModelUrl !== modelUrl);
+  const refining = hasUpgrade && !fullReady && canPreview;
+
+  useEffect(() => {
+    setFullReady(false);
+  }, [modelUrl, fullModelUrl]);
+
+  const handleFullLoaded = useCallback(() => setFullReady(true), []);
 
   return (
     <section className="rounded-card border border-line bg-card p-4 shadow-card sm:p-5">
@@ -76,7 +89,12 @@ export function ModelViewer({ modelUrl, meshIsHighFidelity, warnings, busy, busy
             <Suspense fallback={<LoaderFallback />}>
               <Bounds fit observe margin={1.2}>
                 <Center>
-                  <Model url={modelUrl} extension={extension ?? ""} />
+                  <Model
+                    url={modelUrl}
+                    fullUrl={hasUpgrade ? fullModelUrl : undefined}
+                    extension={extension ?? ""}
+                    onFullLoaded={handleFullLoaded}
+                  />
                 </Center>
               </Bounds>
             </Suspense>
@@ -109,13 +127,31 @@ export function ModelViewer({ modelUrl, meshIsHighFidelity, warnings, busy, busy
             </p>
           </div>
         )}
+
+        {refining && (
+          <div className="pointer-events-none absolute bottom-3 right-3 z-10 inline-flex items-center gap-1.5 rounded-full bg-ink/85 px-3 py-1.5 text-xs font-medium text-white shadow-lg backdrop-blur">
+            <Sparkles className="h-3.5 w-3.5 animate-pulse" aria-hidden />
+            Refining full detail…
+          </div>
+        )}
       </div>
     </section>
   );
 }
 
-function Model({ url, extension }: { url: string; extension: string }) {
-  if (extension === "glb" || extension === "gltf") return <GltfModel url={url} />;
+function Model({
+  url,
+  fullUrl,
+  extension,
+  onFullLoaded
+}: {
+  url: string;
+  fullUrl?: string;
+  extension: string;
+  onFullLoaded?: () => void;
+}) {
+  if (extension === "glb" || extension === "gltf")
+    return <GltfProgressive proxyUrl={url} fullUrl={fullUrl} onFullLoaded={onFullLoaded} />;
   if (extension === "obj") return <ObjModel url={url} />;
   if (extension === "stl") return <StlModel url={url} />;
   return null;
@@ -150,13 +186,51 @@ function enrichObject(root: THREE.Object3D) {
   });
 }
 
-function GltfModel({ url }: { url: string }) {
-  const gltf = useGLTF(url);
-  const scene = useMemo(() => gltf.scene.clone(true), [gltf.scene]);
+// Show the lightweight proxy immediately (Suspense-loaded), then fetch the
+// full-resolution textured GLB in the background and swap it in once ready.
+function GltfProgressive({
+  proxyUrl,
+  fullUrl,
+  onFullLoaded
+}: {
+  proxyUrl: string;
+  fullUrl?: string;
+  onFullLoaded?: () => void;
+}) {
+  const proxy = useGLTF(proxyUrl);
+  const proxyScene = useMemo(() => {
+    const clone = proxy.scene.clone(true);
+    enrichObject(clone);
+    return clone;
+  }, [proxy.scene]);
+
+  const [fullScene, setFullScene] = useState<THREE.Object3D | null>(null);
+
   useEffect(() => {
-    enrichObject(scene);
-  }, [scene]);
-  return <primitive object={scene} />;
+    setFullScene(null);
+    if (!fullUrl) return;
+    let cancelled = false;
+    const loader = new GLTFLoader();
+    loader.load(
+      fullUrl,
+      (gltf) => {
+        if (cancelled) return;
+        enrichObject(gltf.scene);
+        setFullScene(gltf.scene);
+        onFullLoaded?.();
+      },
+      undefined,
+      () => {
+        // If the full mesh fails to load, keep showing the proxy.
+        if (!cancelled) onFullLoaded?.();
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [fullUrl, onFullLoaded]);
+
+  return <primitive object={fullScene ?? proxyScene} />;
 }
 
 function ObjModel({ url }: { url: string }) {

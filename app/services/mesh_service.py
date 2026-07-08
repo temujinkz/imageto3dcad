@@ -70,13 +70,17 @@ def generate_mesh_assets(
     post = postprocess_mesh(generated.mesh_path, output_dir)
     warnings += post.get("warnings", [])
 
+    proxy_glb_path = post.get("proxy_glb_path")
     return {
         "source": generated.source,
         "is_high_fidelity": generated.is_high_fidelity,
         "stl_path": post["stl_path"],
         "obj_path": post["obj_path"],
         "glb_path": post["glb_path"],
-        "preview_model_path": post["glb_path"] or post["obj_path"] or post["stl_path"],
+        "proxy_glb_path": proxy_glb_path,
+        # Show the light proxy first; the full textured GLB loads in the background.
+        "preview_model_path": proxy_glb_path or post["glb_path"] or post["obj_path"] or post["stl_path"],
+        "full_model_path": post["glb_path"],
         "vertex_count": post["vertex_count"],
         "face_count": post["face_count"],
         "bbox": post["bbox"],

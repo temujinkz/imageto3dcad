@@ -83,6 +83,7 @@ export default function Home() {
       const processResponse = await processJob(uploadResponse.job_id);
       setResult({
         previewModelUrl: processResponse.preview_model_url,
+        fullModelUrl: processResponse.full_model_url,
         files: processResponse.files,
         freecad: processResponse.freecad,
         cadSummary: processResponse.cad_summary,
@@ -128,6 +129,7 @@ export default function Home() {
           {showViewer && (
             <ModelViewer
               modelUrl={result?.previewModelUrl}
+              fullModelUrl={result?.fullModelUrl}
               meshIsHighFidelity={result?.meshIsHighFidelity}
               warnings={result?.warnings}
               busy={busy}

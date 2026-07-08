@@ -64,6 +64,7 @@ class ProcessResponse(BaseModel):
     progress: float
     message: str
     preview_model_url: str | None = None
+    full_model_url: str | None = None
     files: dict[str, str] = Field(default_factory=dict)
     cad_summary: CadSummary | None = None
     warnings: list[str] = Field(default_factory=list)
@@ -87,6 +88,7 @@ class JobStatusResponse(BaseModel):
     message: str
     created_at: datetime
     preview_model_url: str | None = None
+    full_model_url: str | None = None
     files: dict[str, str] = Field(default_factory=dict)
     cad_summary: CadSummary | None = None
     warnings: list[str] = Field(default_factory=list)

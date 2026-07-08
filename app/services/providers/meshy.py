@@ -29,24 +29,33 @@ class MeshyProvider:
         headers = {"Authorization": f"Bearer {settings.meshy_api_key}"}
         data_uri = _data_uri(Path(image_path))
 
+        # Three tiers (texturing is Meshy's real time sink, ~3x the geometry step):
+        #   turbo   -> no texture, light mesh        (~1 min, geometry only)
+        #   fast    -> base-color texture, light mesh (~3-4 min, keeps color/text)
+        #   quality -> PBR texture, dense mesh        (~4 min, maximum detail)
+        mode = settings.meshy_mode
+        quality = mode == "quality"
+        turbo = mode == "turbo"
+        body = {
+            "image_url": data_uri,
+            "ai_model": settings.meshy_ai_model,
+            "should_texture": not turbo,
+            "should_remesh": True,
+            "topology": "triangle",
+            "symmetry_mode": "auto",
+            # Only ask for GLB — OBJ/STL are derived locally in postprocess. Fewer
+            # requested formats measurably reduces Meshy task time.
+            "target_formats": ["glb"],
+            "enable_pbr": quality,
+            "target_polycount": settings.meshy_target_polycount if quality else 30000,
+        }
+
         try:
             with httpx.Client(timeout=settings.reconstruction_timeout_seconds) as client:
                 create = client.post(
                     f"{settings.meshy_api_base}/image-to-3d",
                     headers=headers,
-                    json={
-                        "image_url": data_uri,
-                        # Maximum-detail settings: latest model, PBR textures for
-                        # realistic material response, high polycount for dense
-                        # geometry, and remeshing to clean triangle topology.
-                        "ai_model": settings.meshy_ai_model,
-                        "enable_pbr": True,
-                        "should_texture": True,
-                        "should_remesh": True,
-                        "topology": "triangle",
-                        "target_polycount": settings.meshy_target_polycount,
-                        "symmetry_mode": "auto",
-                    },
+                    json=body,
                 )
                 if create.status_code >= 400:
                     return GeneratedMesh(
