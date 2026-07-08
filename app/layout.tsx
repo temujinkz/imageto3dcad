@@ -7,7 +7,7 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
 
 export const metadata: Metadata = {
-  title: "Photo to 3D model",
+  title: "CAD Intelligence",
   description: "Take a few photos of an object and get a 3D model plus CAD files you can download."
 };
 

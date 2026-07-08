@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { DownloadPanel } from "@/components/DownloadPanel";
 import { ModelViewer } from "@/components/ModelViewer";
 import { UploadZone } from "@/components/UploadZone";
+import { CADIntelligenceLogo } from "@/components/CADIntelligenceLogo";
 import { Typer } from "@/components/ui/Typer";
 import { processJob, uploadMedia } from "@/lib/api";
 import { createPreviewThumbnails } from "@/lib/imageConvert";
@@ -102,6 +103,10 @@ export default function Home() {
     <main className="min-h-screen bg-bone">
       <div className="mx-auto w-full max-w-3xl px-5 py-12 sm:py-16">
         <header className="mb-8">
+          <div className="mb-4 flex items-center gap-2.5">
+            <CADIntelligenceLogo className="h-7 w-7" />
+            <span className="text-sm font-semibold uppercase tracking-wide text-muted">CAD Intelligence</span>
+          </div>
           <Typer
             text="Turn a photo into a 3D model"
             className="text-3xl font-semibold tracking-tight text-ink sm:text-[2.5rem] sm:leading-[1.1]"
