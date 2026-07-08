@@ -73,7 +73,7 @@ def generate_flat_part_cad(
             result["stl_path"] = fallback_stl
         result["warnings"] = warnings + [
             "Could not generate a STEP file (no Gemini key and mesh tessellation unavailable). "
-            "Providing STL/OBJ mesh exports instead — import those into your CAD tool."
+            "Providing STL/OBJ mesh exports instead. Import those into your CAD tool."
         ]
 
     # Always leave a solid STL alongside the CAD outputs (parametric track already

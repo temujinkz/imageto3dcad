@@ -30,14 +30,14 @@ def evaluate_mesh(mesh_result: dict) -> list[str]:
     faces = mesh_result.get("face_count")
     if faces is not None and faces <= 12 and source != "mock":
         warnings.append(
-            "The generated mesh has 12 or fewer faces — that is box-shaped and almost certainly "
-            "means reconstruction failed. Check your provider/API key."
+            "The generated mesh has 12 or fewer faces, which is box-shaped and almost certainly "
+            "means reconstruction failed. Check your provider or API key."
         )
     size = mesh_result.get("bbox_size")
     if size and source not in {"mock"}:
         dims = sorted(abs(float(d)) for d in size)
         if dims[0] > 1e-4 and dims[0] / dims[-1] < 0.02:
-            warnings.append("The generated mesh is nearly flat (one dimension ~0) — depth may be missing.")
+            warnings.append("The generated mesh is nearly flat (one dimension ~0), so depth may be missing.")
     return warnings
 
 

@@ -20,12 +20,12 @@ export function DownloadPanel({ result }: { result: PipelineResult | null }) {
 
       {nothing ? (
         <p className="rounded-[14px] border border-dashed border-line bg-bone px-4 py-6 text-sm text-muted">
-          Your GLB, STL, STEP, and DXF files will appear here after you generate a model.
+          Once you make a model, your files show up here to download.
         </p>
       ) : (
         <div className="space-y-5">
           {mesh.length > 0 && (
-            <Group icon={<FileBox className="h-4 w-4" aria-hidden />} title="3D model" hint="for viewing & 3D printing">
+            <Group icon={<FileBox className="h-4 w-4" aria-hidden />} title="3D model" hint="for viewing and 3D printing">
               {mesh.map((key) => (
                 <Chip key={key} href={(files as Record<string, string>)[key]} label={MESH_KEYS[key]} />
               ))}
@@ -33,7 +33,7 @@ export function DownloadPanel({ result }: { result: PipelineResult | null }) {
           )}
 
           {(cad.length > 0 || freecadStep || freecadObj) && (
-            <Group icon={<Ruler className="h-4 w-4" aria-hidden />} title="CAD" hint="open in AutoCAD / FreeCAD">
+            <Group icon={<Ruler className="h-4 w-4" aria-hidden />} title="CAD" hint="open these in AutoCAD or FreeCAD">
               {cad.map((key) => (
                 <Chip
                   key={key}

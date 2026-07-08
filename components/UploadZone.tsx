@@ -100,12 +100,12 @@ export function UploadZone({
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 text-accent">
             <ImagePlus className="h-7 w-7" aria-hidden />
           </div>
-          <p className="text-lg font-semibold tracking-tight text-ink">Drop photos of your object</p>
+          <p className="text-lg font-semibold tracking-tight text-ink">Drop your photos here</p>
           <p className="mt-1.5 max-w-sm text-sm leading-6 text-muted">
-            Front, side, any angles you have. More angles give a better model. Or drop a short orbit video.
+            A few angles work best. You can also drop a short video of the object if you have one.
           </p>
           <span className="mt-5 inline-flex items-center gap-2 rounded-full border border-line bg-card px-4 py-2 text-sm font-medium text-ink">
-            <Plus className="h-4 w-4" aria-hidden /> Choose files
+            <Plus className="h-4 w-4" aria-hidden /> Pick files
           </span>
         </div>
       ) : (
@@ -157,10 +157,10 @@ export function UploadZone({
               {busy ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  {busyLabel ?? "Generating"}
+                  {busyLabel ?? "Working on it"}
                 </>
               ) : (
-                "Generate 3D model"
+                "Make my 3D model"
               )}
             </DepthButton>
           </div>

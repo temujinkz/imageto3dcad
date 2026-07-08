@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Boxes } from "lucide-react";
 import { DownloadPanel } from "@/components/DownloadPanel";
 import { ModelViewer } from "@/components/ModelViewer";
 import { UploadZone } from "@/components/UploadZone";
@@ -68,7 +67,7 @@ export default function Home() {
     try {
       setBusyLabel("Uploading");
       const uploadResponse = await uploadMedia(files, video);
-      setBusyLabel("Generating 3D model");
+      setBusyLabel("Working on it");
       const processResponse = await processJob(uploadResponse.job_id);
       setResult({
         previewModelUrl: processResponse.preview_model_url,
@@ -92,16 +91,12 @@ export default function Home() {
     <main className="min-h-screen bg-bone">
       <div className="mx-auto w-full max-w-3xl px-5 py-12 sm:py-16">
         <header className="mb-8">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1 text-xs font-medium text-muted">
-            <Boxes className="h-3.5 w-3.5 text-accent" aria-hidden />
-            image to 3D CAD
-          </div>
           <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-[2.5rem] sm:leading-[1.1]">
-            Photos in. 3D model out.
+            Turn a photo into a 3D model
           </h1>
           <p className="mt-2 max-w-xl text-base leading-7 text-muted">
-            Drop a few angles of an object, generate a 3D model you can spin, then download it as a mesh or a
-            CAD file for AutoCAD and FreeCAD.
+            Take a few pictures of an object from different sides. You&apos;ll get a 3D model you can spin
+            around and download, either as a mesh or a CAD file you can open in AutoCAD or FreeCAD.
           </p>
         </header>
 

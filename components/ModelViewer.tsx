@@ -61,8 +61,8 @@ export function ModelViewer({ modelUrl, meshSource, meshIsHighFidelity, busy, bu
             <TriangleAlert className="h-3.5 w-3.5" aria-hidden />
           )}
           {meshIsHighFidelity
-            ? `Reconstructed via ${SOURCE_LABELS[meshSource] ?? meshSource}`
-            : `Quick estimate via ${SOURCE_LABELS[meshSource] ?? meshSource}. Add a reconstruction key for full fidelity.`}
+            ? `Built with ${SOURCE_LABELS[meshSource] ?? meshSource}`
+            : `Rough guess from the outline. Add a reconstruction key for a sharper model.`}
         </div>
       )}
 
@@ -86,15 +86,15 @@ export function ModelViewer({ modelUrl, meshSource, meshIsHighFidelity, busy, bu
         ) : busy ? (
           <div className="flex h-full flex-col items-center justify-center px-6 text-center">
             <Loader2 className="mb-3 h-8 w-8 animate-spin text-accent" aria-hidden />
-            <p className="text-base font-semibold text-ink">{busyLabel ?? "Building your model"}</p>
-            <p className="mt-1.5 text-sm text-muted">Reconstruction and CAD export can take a moment.</p>
+            <p className="text-base font-semibold text-ink">{busyLabel ?? "Working on it"}</p>
+            <p className="mt-1.5 text-sm text-muted">The 3D and CAD steps take a little while. Hang tight.</p>
           </div>
         ) : (
           <div className="flex h-full flex-col items-center justify-center px-6 text-center">
             <Box className="mb-3 h-9 w-9 text-muted/60" aria-hidden />
-            <p className="text-base font-semibold text-ink">Your 3D model appears here</p>
+            <p className="text-base font-semibold text-ink">Your model shows up here</p>
             <p className="mt-1.5 max-w-sm text-sm leading-6 text-muted">
-              Upload photos above and hit Generate. You can rotate, zoom, and download it.
+              Add some photos above and make a model. Once it&apos;s ready you can spin it around and download it.
             </p>
           </div>
         )}
