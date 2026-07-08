@@ -20,11 +20,13 @@ from .mock import MockProvider
 from .silhouette import SilhouetteProvider
 from .tripo import TripoProvider
 from .triposr import TriposrProvider
+from .wavespeed import WaveSpeedProvider
 
 # Registration order also defines the "auto" cloud preference order.
 _REGISTRY: dict[str, ImageTo3DProvider] = {
     p.name: p
     for p in (
+        WaveSpeedProvider(),
         MeshyProvider(),
         TripoProvider(),
         FalProvider(),
@@ -38,7 +40,7 @@ _REGISTRY: dict[str, ImageTo3DProvider] = {
 
 # Cloud/local order tried when IMAGE_TO_3D_PROVIDER=auto. Silhouette is last and
 # always available, so the chain never dead-ends.
-_AUTO_ORDER = ["meshy", "tripo-api", "fal-hunyuan3d", "luma", "csm", "triposr", "silhouette"]
+_AUTO_ORDER = ["wavespeed-hunyuan3d", "meshy", "tripo-api", "fal-hunyuan3d", "luma", "csm", "triposr", "silhouette"]
 
 
 def resolve_order(settings: Settings) -> list[str]:

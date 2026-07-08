@@ -13,7 +13,7 @@ cuboid. That is fixed. The mesh step is now a **provider chain**:
 
 ```
 IMAGE_TO_3D_PROVIDER=auto   # first available wins:
-  meshy  ->  tripo-api  ->  fal-hunyuan3d  ->  luma  ->  csm  ->  triposr  ->  silhouette
+  wavespeed-hunyuan3d -> meshy -> tripo-api -> fal-hunyuan3d -> luma -> csm -> triposr -> silhouette
 ```
 
 - **Cloud providers** (Meshy/Tripo/fal/…) run neural reconstruction on their
@@ -46,7 +46,8 @@ Response metadata: `step_generated`, `step_quality`
 
 | Key | Provider | Purpose |
 |-----|----------|---------|
-| `MESHY_API_KEY` | meshy.ai (free tier) | **Recommended.** High-fidelity mesh on Meshy's GPU. |
+| `WAVESPEED_API_KEY` | wavespeed.ai (pay-per-use) | **Recommended.** Hunyuan3D V3 high-fidelity mesh on WaveSpeed's GPU. Tried first in `auto`. |
+| `MESHY_API_KEY` | meshy.ai (API is paid) | High-fidelity mesh on Meshy's GPU. |
 | `GEMINI_API_KEY` | Google AI Studio | **Recommended.** Clean parametric STEP for AutoCAD (called over REST — no SDK). |
 | `TRIPO_API_KEY` | platform.tripo3d.ai | Fallback cloud mesh provider. |
 | `FAL_KEY` (+`FAL_MODEL`) | fal.ai | Optional SOTA geometry (Hunyuan3D-2 / TRELLIS). |

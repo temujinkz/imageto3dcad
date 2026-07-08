@@ -63,6 +63,7 @@ def capabilities() -> dict:
         "csm_configured": bool(settings.csm_api_key),
         "tripo_api_configured": bool(settings.tripo_api_key),
         "meshy_configured": bool(settings.meshy_api_key),
+        "wavespeed_configured": bool(settings.wavespeed_api_key),
         "fal_configured": bool(settings.fal_api_key),
         "gemini_configured": bool(settings.gemini_api_key),
         "image_to_3d_provider": settings.image_to_3d_provider,

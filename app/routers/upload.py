@@ -515,7 +515,7 @@ def _completion_message(*, run_mesh: bool, run_cad: bool) -> str:
     return "Job completed"
 
 
-HIGH_FIDELITY_MESH_SOURCES = {"triposr", "luma", "csm", "tripo-api", "meshy", "fal-hunyuan3d"}
+HIGH_FIDELITY_MESH_SOURCES = {"triposr", "luma", "csm", "tripo-api", "meshy", "fal-hunyuan3d", "wavespeed-hunyuan3d"}
 
 
 def _serialize_process(job: dict, request: Request, settings: Settings) -> ProcessResponse:

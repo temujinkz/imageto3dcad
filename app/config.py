@@ -53,6 +53,9 @@ class Settings:
     tripo_api_base: str
     meshy_api_key: str | None
     meshy_api_base: str
+    wavespeed_api_key: str | None
+    wavespeed_api_base: str
+    wavespeed_model: str
     fal_api_key: str | None
     fal_model: str
     gemini_api_key: str | None
@@ -97,6 +100,11 @@ def get_settings() -> Settings:
         tripo_api_base=os.getenv("TRIPO_API_BASE", "https://api.tripo3d.ai/v2"),
         meshy_api_key=os.getenv("MESHY_API_KEY"),
         meshy_api_base=os.getenv("MESHY_API_BASE", "https://api.meshy.ai/openapi/v1"),
+        wavespeed_api_key=os.getenv("WAVESPEED_API_KEY"),
+        wavespeed_api_base=os.getenv("WAVESPEED_API_BASE", "https://api.wavespeed.ai/api/v3"),
+        # Hunyuan3D on WaveSpeed. Override with e.g.
+        # "wavespeed-ai/hunyuan-3d-v3.1/image-to-3d-rapid" for the faster/cheaper model.
+        wavespeed_model=os.getenv("WAVESPEED_MODEL", "wavespeed-ai/hunyuan3d-v3/image-to-3d"),
         fal_api_key=os.getenv("FAL_KEY") or os.getenv("FAL_API_KEY"),
         # fal.ai hosted image-to-3D model. Hunyuan3D-2 gives strong geometry;
         # swap for "fal-ai/trellis" or "fal-ai/triposr" via env if preferred.
