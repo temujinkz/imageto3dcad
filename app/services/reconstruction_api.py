@@ -2,12 +2,30 @@ from __future__ import annotations
 
 import base64
 import importlib
+import io
 import time
 from pathlib import Path
 
 import httpx
+from PIL import Image
 
 from ..config import Settings
+
+
+def _resized_data_uri(path: Path, max_dimension: int = 1536) -> str:
+    """Downscales before base64-encoding: full-resolution phone photos (10+MB)
+    inflate to a much larger JSON body once base64-encoded, which is slow to
+    upload and can outright corrupt over TLS on some network stacks/older SSL
+    libraries. 1536px is plenty of detail for these reconstruction APIs."""
+    with Image.open(path) as image:
+        image = image.convert("RGBA")
+        if max(image.size) > max_dimension:
+            scale = max_dimension / max(image.size)
+            new_size = (max(1, round(image.width * scale)), max(1, round(image.height * scale)))
+            image = image.resize(new_size, Image.LANCZOS)
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        return f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode('ascii')}"
 
 
 def reconstruct_from_images(
@@ -70,6 +88,8 @@ def _provider_order(settings: Settings) -> list[str]:
         order.append("tripo")
     if settings.meshy_api_key:
         order.append("meshy")
+    if settings.wavespeed_api_key:
+        order.append("wavespeed")
     return order
 
 
@@ -87,6 +107,8 @@ def _try_provider(
         return _tripo_api_reconstruct(image_paths, output_dir, settings)
     if provider == "meshy":
         return _meshy_reconstruct(image_paths, output_dir, settings)
+    if provider == "wavespeed":
+        return _wavespeed_reconstruct(image_paths, output_dir, settings)
     return None
 
 
@@ -94,9 +116,7 @@ def _meshy_reconstruct(image_paths: list[Path], output_dir: Path, settings: Sett
     if not settings.meshy_api_key:
         return None
 
-    primary = image_paths[0]
-    mime = "image/png" if primary.suffix.lower() == ".png" else "image/jpeg"
-    data_uri = f"data:{mime};base64,{base64.b64encode(primary.read_bytes()).decode('ascii')}"
+    data_uri = _resized_data_uri(image_paths[0])
     headers = {"Authorization": f"Bearer {settings.meshy_api_key}"}
 
     try:
@@ -134,6 +154,71 @@ def _poll_meshy(client: httpx.Client, headers: dict, task_id: str, settings: Set
         if status in {"FAILED", "ERROR", "CANCELED"}:
             return None
         time.sleep(4)
+    return None
+
+
+def _wavespeed_reconstruct(image_paths: list[Path], output_dir: Path, settings: Settings) -> dict | None:
+    """WaveSpeedAI's Hunyuan3D V2 Multi-View model takes three named views
+    (front/back/left) rather than an arbitrary list, so extra angle photos
+    beyond three are unused and missing ones reuse the first image."""
+    if not settings.wavespeed_api_key:
+        return None
+
+    front = image_paths[0]
+    back = image_paths[1] if len(image_paths) > 1 else front
+    left = image_paths[2] if len(image_paths) > 2 else front
+
+    headers = {
+        "Authorization": f"Bearer {settings.wavespeed_api_key}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        with httpx.Client(timeout=settings.reconstruction_timeout_seconds) as client:
+            create = client.post(
+                f"{settings.wavespeed_api_base}/wavespeed-ai/hunyuan3d-v2-multi-view",
+                headers=headers,
+                json={
+                    "front_image_url": _resized_data_uri(front),
+                    "back_image_url": _resized_data_uri(back),
+                    "left_image_url": _resized_data_uri(left),
+                },
+            )
+            if create.status_code >= 400:
+                return None
+            data = create.json().get("data", {})
+            task_id = data.get("id")
+            poll_url = data.get("urls", {}).get("get")
+            if not task_id:
+                return None
+
+            download_url = _poll_wavespeed(
+                client,
+                headers,
+                poll_url or f"{settings.wavespeed_api_base}/predictions/{task_id}/result",
+                settings,
+            )
+            if not download_url:
+                return None
+            return _download_mesh(download_url, output_dir, source="wavespeed")
+    except Exception:
+        return None
+
+
+def _poll_wavespeed(client: httpx.Client, headers: dict, poll_url: str, settings: Settings) -> str | None:
+    deadline = time.time() + settings.reconstruction_timeout_seconds
+    while time.time() < deadline:
+        response = client.get(poll_url, headers=headers)
+        if response.status_code >= 400:
+            return None
+        data = response.json().get("data", {})
+        status = (data.get("status") or "").lower()
+        if status == "completed":
+            outputs = data.get("outputs") or []
+            return outputs[0] if outputs else None
+        if status == "failed":
+            return None
+        time.sleep(3)
     return None
 
 

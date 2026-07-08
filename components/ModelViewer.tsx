@@ -21,7 +21,8 @@ const SOURCE_LABELS: Record<string, string> = {
   luma: "Luma Dream Machine",
   csm: "CSM.ai",
   "tripo-api": "Tripo API",
-  meshy: "Meshy.ai"
+  meshy: "Meshy.ai",
+  wavespeed: "WaveSpeedAI (Hunyuan3D)"
 };
 
 export function ModelViewer({ modelUrl, mode, meshSource, meshIsHighFidelity }: ModelViewerProps) {

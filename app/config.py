@@ -52,6 +52,8 @@ class Settings:
     tripo_api_base: str
     meshy_api_key: str | None
     meshy_api_base: str
+    wavespeed_api_key: str | None
+    wavespeed_api_base: str
     reconstruction_timeout_seconds: int
     max_upload_images: int
     max_video_frames: int
@@ -88,6 +90,8 @@ def get_settings() -> Settings:
         tripo_api_base=os.getenv("TRIPO_API_BASE", "https://api.tripo3d.ai/v2"),
         meshy_api_key=os.getenv("MESHY_API_KEY"),
         meshy_api_base=os.getenv("MESHY_API_BASE", "https://api.meshy.ai/openapi/v1"),
+        wavespeed_api_key=os.getenv("WAVESPEED_API_KEY"),
+        wavespeed_api_base=os.getenv("WAVESPEED_API_BASE", "https://api.wavespeed.ai/api/v3"),
         reconstruction_timeout_seconds=int(os.getenv("RECONSTRUCTION_TIMEOUT_SECONDS", "600")),
         max_upload_images=int(os.getenv("MAX_UPLOAD_IMAGES", "20")),
         max_video_frames=int(os.getenv("MAX_VIDEO_FRAMES", "12")),

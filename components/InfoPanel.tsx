@@ -6,6 +6,7 @@ import type { Capabilities } from "@/lib/api";
 function activeReconstructionBackend(capabilities: Capabilities | null): string | null {
   if (!capabilities) return null;
   if (capabilities.meshy_configured) return "Meshy.ai";
+  if (capabilities.wavespeed_configured) return "WaveSpeedAI (Hunyuan3D)";
   if (capabilities.csm_configured) return "CSM.ai";
   if (capabilities.luma_configured) return "Luma Dream Machine";
   if (capabilities.tripo_api_configured) return "Tripo API";

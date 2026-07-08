@@ -47,6 +47,7 @@ export type Capabilities = {
   csm_configured: boolean;
   tripo_api_configured: boolean;
   meshy_configured: boolean;
+  wavespeed_configured: boolean;
   supported_image_formats: string[];
   supported_video_formats: string[];
 };

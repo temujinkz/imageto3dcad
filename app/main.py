@@ -63,6 +63,7 @@ def capabilities() -> dict:
         "csm_configured": bool(settings.csm_api_key),
         "tripo_api_configured": bool(settings.tripo_api_key),
         "meshy_configured": bool(settings.meshy_api_key),
+        "wavespeed_configured": bool(settings.wavespeed_api_key),
         "supported_image_formats": sorted(SUPPORTED_EXTENSIONS),
         "supported_video_formats": sorted(VIDEO_EXTENSIONS),
     }
