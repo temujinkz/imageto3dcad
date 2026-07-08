@@ -5,15 +5,16 @@ import { CADIntelligenceLogo } from "@/components/CADIntelligenceLogo";
 
 // DVD-screensaver-style bouncer, driven by requestAnimationFrame so we can tune
 // the speed and recolor the logo on every wall bounce. Each border touch cycles
-// to the next palette entry below. Colors come from hue-rotating the orange mark
-// (which preserves its 3D shading); black is a brightness knockout.
+// to the next palette entry below. Every color is a hue-rotation of the orange
+// mark, which keeps the cube's 3D shading readable (no flat black knockouts).
 // Must live inside a `relative overflow-hidden` parent. Decorative (no pointer).
 const COLOR_FILTERS = [
   "none", // brand orange
-  "hue-rotate(200deg) saturate(1.25)", // blue
-  "brightness(0)", // black
-  "hue-rotate(255deg) saturate(1.2)", // purple
+  "hue-rotate(-25deg) saturate(1.3)", // red
   "hue-rotate(310deg) saturate(1.35)", // pink
+  "hue-rotate(255deg) saturate(1.2)", // purple
+  "hue-rotate(200deg) saturate(1.25)", // blue
+  "hue-rotate(160deg) saturate(1.2)", // cyan
   "hue-rotate(120deg) saturate(1.15)" // green
 ];
 
