@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import base64
 import io
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, runtime_checkable
@@ -24,6 +25,38 @@ from PIL import Image
 from ...config import Settings
 
 MESH_SUFFIXES = {".glb", ".gltf", ".obj", ".stl", ".ply"}
+
+# Blips that say "try again", not "this request is wrong": DNS hiccups, refused
+# or reset connections, read timeouts, and raw socket errors such as macOS
+# EADDRNOTAVAIL ([Errno 49] Can't assign requested address). Without a retry a
+# single one of these silently demotes the whole job to the local silhouette
+# fallback, which loses the cloud provider's colour/texture.
+TRANSIENT_NETWORK_ERRORS = (httpx.TransportError, OSError)
+
+
+def post_with_retry(
+    client: httpx.Client,
+    url: str,
+    *,
+    headers: dict,
+    json: dict,
+    attempts: int = 3,
+    backoff_seconds: float = 2.0,
+) -> httpx.Response:
+    """POST, retrying only transient transport failures with linear backoff.
+
+    HTTP error *responses* (4xx/5xx) are returned as-is for the caller to judge;
+    only connection-level failures are retried.
+    """
+    last_error: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            return client.post(url, headers=headers, json=json)
+        except TRANSIENT_NETWORK_ERRORS as exc:
+            last_error = exc
+            if attempt < attempts - 1:
+                time.sleep(backoff_seconds * (attempt + 1))
+    raise last_error  # type: ignore[misc]
 
 
 def resized_data_uri(path: Path, max_dimension: int = 1536) -> str:

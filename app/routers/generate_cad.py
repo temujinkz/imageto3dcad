@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
+from starlette.concurrency import run_in_threadpool
 
 from ..config import Settings
 from ..jobs import JobStore
@@ -29,8 +30,9 @@ def build_router(store: JobStore, settings: Settings) -> APIRouter:
         if payload.thickness_mm is not None:
             options["thickness_mm"] = payload.thickness_mm
         store.update(payload.job_id, options=options)
-        _prepare_image(payload.job_id, store, settings)
-        result = _run_generation_job(
+        await run_in_threadpool(_prepare_image, payload.job_id, store, settings)
+        result = await run_in_threadpool(
+            _run_generation_job,
             store,
             settings,
             payload.job_id,
@@ -65,7 +67,7 @@ def build_router(store: JobStore, settings: Settings) -> APIRouter:
         job = store.get(job_id)
         if not job:
             raise HTTPException(status_code=404, detail="Invalid job ID")
-        _prepare_image(job_id, store, settings)
+        await run_in_threadpool(_prepare_image, job_id, store, settings)
         store.update(job_id, status="queued", progress=0.1, message="CAD generation queued")
         _start_thread(store, settings, job_id, run_mesh=False, run_cad=True)
         return JobAcceptedResponse(

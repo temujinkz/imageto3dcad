@@ -31,6 +31,13 @@ def _load_birefnet():
     return model.to(device), device
 
 
+# Background removal (and especially its alpha-matting refinement) scales with
+# pixel count: a 12 MP phone photo takes ~16 s versus ~2.5 s at this cap, for a
+# mask that is materially identical. Downstream consumers never need more --
+# the 3D providers are sent a 1536 px image anyway (see providers.base).
+MAX_MASKING_DIMENSION = 2048
+
+
 def create_masked_image(
     input_path: Path,
     output_path: Path,
@@ -39,6 +46,8 @@ def create_masked_image(
 ) -> list[str]:
     warnings: list[str] = []
     original = Image.open(input_path).convert("RGBA")
+    if max(original.size) > MAX_MASKING_DIMENSION:
+        original.thumbnail((MAX_MASKING_DIMENSION, MAX_MASKING_DIMENSION), Image.LANCZOS)
     image = original
 
     if enable_background_removal:

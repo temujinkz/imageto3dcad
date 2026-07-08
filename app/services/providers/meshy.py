@@ -12,7 +12,13 @@ from pathlib import Path
 import httpx
 
 from ...config import Settings
-from .base import GeneratedMesh, download_mesh_file, resized_data_uri
+from .base import (
+    TRANSIENT_NETWORK_ERRORS,
+    GeneratedMesh,
+    download_mesh_file,
+    post_with_retry,
+    resized_data_uri,
+)
 
 
 class MeshyProvider:
@@ -52,7 +58,8 @@ class MeshyProvider:
 
         try:
             with httpx.Client(timeout=settings.reconstruction_timeout_seconds) as client:
-                create = client.post(
+                create = post_with_retry(
+                    client,
                     f"{settings.meshy_api_base}/image-to-3d",
                     headers=headers,
                     json=body,
@@ -92,10 +99,23 @@ def _data_uri(path: Path) -> str:
 
 
 def _poll(client: httpx.Client, headers: dict, task_id: str, settings: Settings) -> str | None:
+    """Poll until the task finishes.
+
+    The reconstruction is already running (and paid for) on Meshy's side, so a
+    transient network blip or a 5xx must not abandon it — only a client error
+    (4xx) or an explicit terminal status is fatal.
+    """
     deadline = time.time() + settings.reconstruction_timeout_seconds
     while time.time() < deadline:
-        response = client.get(f"{settings.meshy_api_base}/image-to-3d/{task_id}", headers=headers)
-        if response.status_code >= 400:
+        try:
+            response = client.get(f"{settings.meshy_api_base}/image-to-3d/{task_id}", headers=headers)
+        except TRANSIENT_NETWORK_ERRORS:
+            time.sleep(4)
+            continue
+        if response.status_code >= 500:  # server-side blip, keep waiting
+            time.sleep(4)
+            continue
+        if response.status_code >= 400:  # bad request/auth -> genuinely fatal
             return None
         payload = response.json()
         status = (payload.get("status") or "").upper()

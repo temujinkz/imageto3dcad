@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from PIL import Image
+from starlette.concurrency import run_in_threadpool
 
 from ..config import Settings
 from ..jobs import JobStore
@@ -78,7 +79,9 @@ def build_router(store: JobStore, settings: Settings) -> APIRouter:
             if extra_paths:
                 store.update(job["job_id"], extra_image_paths=extra_paths)
 
-        prepared = _prepare_image(job["job_id"], store, settings)
+        # Background removal is heavy CPU work (rembg, once per angle); keep it
+        # off the event loop so the server stays responsive during upload.
+        prepared = await run_in_threadpool(_prepare_image, job["job_id"], store, settings)
         if prepared["status"] == "failed":
             raise HTTPException(status_code=400, detail=prepared.get("error") or "Could not read that file as an image.")
         for warning in warnings:
@@ -121,7 +124,12 @@ def build_router(store: JobStore, settings: Settings) -> APIRouter:
             options["thickness_mm"] = payload.thickness_mm
         store.update(payload.job_id, options=options)
 
-        result = _run_generation_job(
+        # The pipeline is fully blocking (rembg, sync httpx to the 3D provider,
+        # trimesh, cadquery). Running it directly in this async handler would
+        # freeze the event loop for minutes, so the server could not serve the
+        # frontend, /health, or any file URL while a job was in flight.
+        result = await run_in_threadpool(
+            _run_generation_job,
             store,
             settings,
             payload.job_id,
