@@ -1,96 +1,75 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AdvancedOptions, type Dimensions } from "@/components/AdvancedOptions";
+import { Boxes } from "lucide-react";
 import { DownloadPanel } from "@/components/DownloadPanel";
-import { InfoPanel } from "@/components/InfoPanel";
 import { ModelViewer } from "@/components/ModelViewer";
-import { ProgressPanel } from "@/components/ProgressPanel";
-import { UploadCard } from "@/components/UploadCard";
-import { getCapabilities, processJob, uploadMedia, type Capabilities, type ProcessOptions } from "@/lib/api";
-import type { JobResponse, PipelineResult, UploadResponse, WorkflowStep } from "@/lib/types";
+import { UploadZone } from "@/components/UploadZone";
+import { processJob, uploadMedia } from "@/lib/api";
+import type { PipelineResult } from "@/lib/types";
 
-const failureMessage = "Generation failed. Try a clearer photo of a simple object, ideally with a few extra angles.";
+const failureMessage = "Generation failed. Try clearer photos of a simple object, ideally a few angles.";
 
 export default function Home() {
+  const [files, setFiles] = useState<File[]>([]);
+  const [video, setVideo] = useState<File | null>(null);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
-  const [isVideoPreview, setIsVideoPreview] = useState(false);
-  const [upload, setUpload] = useState<UploadResponse | null>(null);
-  const [job, setJob] = useState<JobResponse | null>(null);
+  const [isVideo, setIsVideo] = useState(false);
   const [result, setResult] = useState<PipelineResult | null>(null);
-  const [step, setStep] = useState<WorkflowStep>("Ready");
   const [busy, setBusy] = useState(false);
+  const [busyLabel, setBusyLabel] = useState("Generating");
   const [error, setError] = useState<string | null>(null);
-  const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
-  const [dimensions, setDimensions] = useState<Dimensions>({
-    known_width_mm: "",
-    known_height_mm: "",
-    thickness_mm: ""
-  });
   const previewUrlsRef = useRef<string[]>([]);
-
-  useEffect(() => {
-    getCapabilities()
-      .then(setCapabilities)
-      .catch(() => setCapabilities(null));
-  }, []);
 
   useEffect(() => {
     previewUrlsRef.current = previewUrls;
   }, [previewUrls]);
 
   useEffect(() => {
-    return () => {
-      previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-    };
+    return () => previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
   }, []);
 
-  function resetPreviews() {
+  function revokePreviews() {
     previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-    setPreviewUrls([]);
-    setIsVideoPreview(false);
+  }
+
+  function handleFilesReady(nextFiles: File[], nextVideo: File | null) {
+    revokePreviews();
+    setResult(null);
+    setError(null);
+    if (nextVideo) {
+      setVideo(nextVideo);
+      setFiles([]);
+      setIsVideo(true);
+      setPreviewUrls([URL.createObjectURL(nextVideo)]);
+    } else {
+      setVideo(null);
+      setFiles(nextFiles);
+      setIsVideo(false);
+      setPreviewUrls(nextFiles.map((file) => URL.createObjectURL(file)));
+    }
   }
 
   function handleReset() {
-    resetPreviews();
-    setUpload(null);
-    setJob(null);
+    revokePreviews();
+    setFiles([]);
+    setVideo(null);
+    setPreviewUrls([]);
+    setIsVideo(false);
     setResult(null);
     setError(null);
-    setStep("Ready");
   }
 
-  async function handleMediaReady(files: File[], video: File | null) {
-    resetPreviews();
-    setUpload(null);
-    setJob(null);
-    setResult(null);
-    setError(null);
-
-    if (video) {
-      setIsVideoPreview(true);
-      setPreviewUrls([URL.createObjectURL(video)]);
-    } else {
-      setPreviewUrls(files.map((file) => URL.createObjectURL(file)));
-    }
-
-    await runPipeline(files, video);
-  }
-
-  async function runPipeline(files: File[], video: File | null) {
+  async function handleGenerate() {
+    if (busy || (files.length === 0 && !video)) return;
     setBusy(true);
-    setStep("Converting format");
-
+    setError(null);
+    setResult(null);
     try {
-      setStep("Uploading");
+      setBusyLabel("Uploading");
       const uploadResponse = await uploadMedia(files, video);
-      setUpload(uploadResponse);
-
-      setStep("Removing background");
-      setStep("Generating 3D model");
-      const processResponse = await processJob(uploadResponse.job_id, buildDimensionOptions(dimensions));
-
-      setStep("Preparing CAD exports");
+      setBusyLabel("Generating 3D model");
+      const processResponse = await processJob(uploadResponse.job_id);
       setResult({
         previewModelUrl: processResponse.preview_model_url,
         files: processResponse.files,
@@ -100,91 +79,57 @@ export default function Home() {
         meshSource: processResponse.mesh_source,
         meshIsHighFidelity: processResponse.mesh_is_high_fidelity
       });
-      setJob({
-        job_id: processResponse.job_id,
-        status: processResponse.status,
-        progress: 100,
-        message: processResponse.message,
-        preview_model_url: processResponse.preview_model_url,
-        files: processResponse.files,
-        freecad: processResponse.freecad,
-        warnings: processResponse.warnings,
-        mesh_source: processResponse.mesh_source,
-        mesh_is_high_fidelity: processResponse.mesh_is_high_fidelity
-      });
-      setStep("Completed");
     } catch (pipelineError) {
       setError(pipelineError instanceof Error ? pipelineError.message : failureMessage);
-      setStep("Failed");
     } finally {
       setBusy(false);
     }
   }
 
+  const showViewer = busy || Boolean(result?.previewModelUrl);
+
   return (
-    <main className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-4xl flex-col gap-1 px-4 py-6 sm:px-6">
-          <span className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">
-            Photo2CAD
-          </span>
-          <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">Drop a photo. Get a 3D CAD file.</h1>
-          <p className="max-w-2xl text-base text-slate-600">
-            Background removal, 3D reconstruction, and FreeCAD-ready exports happen automatically.
+    <main className="min-h-screen bg-bone">
+      <div className="mx-auto w-full max-w-3xl px-5 py-12 sm:py-16">
+        <header className="mb-8">
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1 text-xs font-medium text-muted">
+            <Boxes className="h-3.5 w-3.5 text-accent" aria-hidden />
+            image to 3D CAD
+          </div>
+          <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-[2.5rem] sm:leading-[1.1]">
+            Photos in. 3D model out.
+          </h1>
+          <p className="mt-2 max-w-xl text-base leading-7 text-muted">
+            Drop a few angles of an object, generate a 3D model you can spin, then download it as a mesh or a
+            CAD file for AutoCAD and FreeCAD.
           </p>
-        </div>
-      </header>
+        </header>
 
-      <div className="mx-auto max-w-4xl space-y-6 px-4 py-8 sm:px-6">
-        <UploadCard
-          busy={busy}
-          busyLabel={step}
-          disabled={busy}
-          error={error}
-          previewUrls={previewUrls}
-          isVideoPreview={isVideoPreview}
-          maskedImageUrl={upload?.masked_image_url}
-          onMediaReady={handleMediaReady}
-          onReset={handleReset}
-        />
-
-        {(busy || job) && <ProgressPanel step={step} job={job} isProcessing={busy} error={error} />}
-
-        {result?.previewModelUrl && (
-          <ModelViewer
-            modelUrl={result.previewModelUrl}
-            mode="both"
-            meshSource={result.meshSource}
-            meshIsHighFidelity={result.meshIsHighFidelity}
+        <div className="space-y-5">
+          <UploadZone
+            previewUrls={previewUrls}
+            isVideo={isVideo}
+            busy={busy}
+            busyLabel={busyLabel}
+            error={error}
+            onFilesReady={handleFilesReady}
+            onGenerate={handleGenerate}
+            onReset={handleReset}
           />
-        )}
 
-        {result && <DownloadPanel result={result} />}
+          {showViewer && (
+            <ModelViewer
+              modelUrl={result?.previewModelUrl}
+              meshSource={result?.meshSource}
+              meshIsHighFidelity={result?.meshIsHighFidelity}
+              busy={busy}
+              busyLabel={busyLabel}
+            />
+          )}
 
-        <AdvancedOptions
-          dimensions={dimensions}
-          disabled={busy}
-          onChange={(key, value) => setDimensions((current) => ({ ...current, [key]: value }))}
-        />
-
-        <InfoPanel capabilities={capabilities} />
+          {result && <DownloadPanel result={result} />}
+        </div>
       </div>
     </main>
   );
-}
-
-function buildDimensionOptions(dimensions: Dimensions): ProcessOptions {
-  const options: ProcessOptions = {};
-  const width = parseOptionalNumber(dimensions.known_width_mm);
-  const height = parseOptionalNumber(dimensions.known_height_mm);
-  const thickness = parseOptionalNumber(dimensions.thickness_mm);
-  if (width !== undefined) options.known_width_mm = width;
-  if (height !== undefined) options.known_height_mm = height;
-  if (thickness !== undefined) options.thickness_mm = thickness;
-  return options;
-}
-
-function parseOptionalNumber(value: string) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }

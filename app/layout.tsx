@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
+
 export const metadata: Metadata = {
-  title: "Photo2CAD | Image to CAD Prototype",
-  description: "Upload an object photo and generate estimated mesh and CAD-friendly draft files."
+  title: "image to 3D CAD",
+  description: "Upload a few photos of an object and get a 3D model plus CAD files."
 };
 
 export default function RootLayout({
@@ -13,7 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className={`${geist.variable} ${geistMono.variable} font-sans`}>{children}</body>
     </html>
   );
 }
