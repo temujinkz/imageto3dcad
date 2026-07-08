@@ -11,14 +11,13 @@ warning and the chain falls back to the local silhouette engine.
 
 from __future__ import annotations
 
-import base64
 import time
 from pathlib import Path
 
 import httpx
 
 from ...config import Settings
-from .base import GeneratedMesh, download_mesh_file
+from .base import GeneratedMesh, download_mesh_file, resized_data_uri
 
 
 class WaveSpeedProvider:
@@ -35,7 +34,7 @@ class WaveSpeedProvider:
         headers = {"Authorization": f"Bearer {settings.wavespeed_api_key}"}
         base = settings.wavespeed_api_base.rstrip("/")
         submit_url = f"{base}/{settings.wavespeed_model.strip('/')}"
-        data_uri = _data_uri(Path(image_path))
+        data_uri = resized_data_uri(Path(image_path))
 
         try:
             with httpx.Client(timeout=settings.reconstruction_timeout_seconds) as client:
@@ -68,10 +67,67 @@ class WaveSpeedProvider:
         except Exception as exc:
             return GeneratedMesh(self.name, "", True, [f"WaveSpeed error: {exc}"])
 
+    def generate_multiview(
+        self, image_paths: list[str], output_dir: str, settings: Settings
+    ) -> GeneratedMesh | None:
+        """Fuse several angle photos into one mesh via WaveSpeed's Hunyuan3D V2
+        Multi-View model (named front/back/left views), rather than guessing the
+        hidden sides from a single image. Falls back to single-image ``generate``
+        if only one view is available."""
+        if not settings.wavespeed_api_key:
+            return None
+        views = [p for p in image_paths if p and Path(p).exists()]
+        if len(views) < 2:
+            return self.generate(views[0], output_dir, settings) if views else None
 
-def _data_uri(path: Path) -> str:
-    mime = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
-    return f"data:{mime};base64,{base64.b64encode(path.read_bytes()).decode('ascii')}"
+        out = Path(output_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        headers = {"Authorization": f"Bearer {settings.wavespeed_api_key}"}
+        base = settings.wavespeed_api_base.rstrip("/")
+        submit_url = f"{base}/{settings.wavespeed_multiview_model.strip('/')}"
+
+        front = Path(views[0])
+        back = Path(views[1])
+        left = Path(views[2]) if len(views) > 2 else front
+
+        try:
+            with httpx.Client(timeout=settings.reconstruction_timeout_seconds) as client:
+                submit = client.post(
+                    submit_url,
+                    headers={**headers, "Content-Type": "application/json"},
+                    json={
+                        "front_image_url": resized_data_uri(front),
+                        "back_image_url": resized_data_uri(back),
+                        "left_image_url": resized_data_uri(left),
+                        "textured_mesh": True,
+                    },
+                )
+                if submit.status_code >= 400:
+                    return GeneratedMesh(
+                        self.name, "", True,
+                        [f"WaveSpeed multi-view submit failed (HTTP {submit.status_code}): {submit.text[:200]}"],
+                    )
+                data = submit.json().get("data") or {}
+                request_id = data.get("id")
+                if not request_id:
+                    return GeneratedMesh(self.name, "", True, ["WaveSpeed multi-view returned no prediction id."])
+
+                # Construct the poll URL ourselves: WaveSpeed's returned
+                # data.urls.get has a malformed double slash that 404s.
+                poll_url = f"{base}/predictions/{request_id}/result"
+                url = _poll(client, headers, poll_url, settings)
+                if not url:
+                    return GeneratedMesh(self.name, "", True, ["WaveSpeed multi-view task did not produce a model."])
+
+                mesh_path = download_mesh_file(url, out)
+                if mesh_path is None:
+                    return GeneratedMesh(self.name, "", True, ["WaveSpeed multi-view model download failed."])
+                return GeneratedMesh(
+                    self.name, str(mesh_path), True,
+                    meta={"request_id": request_id, "views": len(views), "multiview": True},
+                )
+        except Exception as exc:
+            return GeneratedMesh(self.name, "", True, [f"WaveSpeed multi-view error: {exc}"])
 
 
 def _poll(client: httpx.Client, headers: dict, poll_url: str, settings: Settings) -> str | None:

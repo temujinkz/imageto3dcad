@@ -12,15 +12,40 @@ still produces a real, rounded 3D shape.
 
 from __future__ import annotations
 
+import base64
+import io
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 import httpx
+from PIL import Image
 
 from ...config import Settings
 
 MESH_SUFFIXES = {".glb", ".gltf", ".obj", ".stl", ".ply"}
+
+
+def resized_data_uri(path: Path, max_dimension: int = 1536) -> str:
+    """Base64 data URI of an image, downscaled so its longest side is at most
+    ``max_dimension`` px.
+
+    Full-resolution phone photos (10 MB+) balloon once base64-encoded, which is
+    slow to upload and, on some SSL stacks (e.g. macOS LibreSSL), corrupts the
+    request body mid-flight ("bad record mac"). 1536 px keeps ample detail for
+    these reconstruction models while keeping the payload small and reliable.
+    """
+    with Image.open(path) as image:
+        image = image.convert("RGBA")
+        if max(image.size) > max_dimension:
+            scale = max_dimension / max(image.size)
+            image = image.resize(
+                (max(1, round(image.width * scale)), max(1, round(image.height * scale))),
+                Image.LANCZOS,
+            )
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+    return f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode('ascii')}"
 
 
 @dataclass

@@ -40,16 +40,19 @@ def generate_mesh_assets(
     )
     warnings = list(geometry.get("warnings", []))
 
-    if extra_image_paths:
-        existing = [p for p in extra_image_paths if Path(p).exists()]
-        if existing:
-            warnings.append(
-                f"{len(existing)} extra angle photo(s) were uploaded, but the active provider "
-                "reconstructs from the single primary image; the others were not used."
-            )
+    existing_extras = [str(p) for p in (extra_image_paths or []) if Path(p).exists()]
 
     recon_dir = output_dir / "reconstruction"
-    generated = providers.generate(str(image_path), str(recon_dir), settings)
+    generated = providers.generate(
+        str(image_path), str(recon_dir), settings, extra_image_paths=existing_extras
+    )
+
+    if existing_extras and not (generated and generated.meta.get("multiview")):
+        warnings.append(
+            f"{len(existing_extras)} extra angle photo(s) were uploaded, but the active provider "
+            "reconstructs from the single primary image; the others were not used. "
+            "Set a WaveSpeed key to fuse multiple angles into one model."
+        )
 
     if generated is None or not generated.mesh_path or not Path(generated.mesh_path).exists():
         return {

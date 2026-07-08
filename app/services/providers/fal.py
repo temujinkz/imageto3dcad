@@ -7,14 +7,13 @@ dependency (uses httpx + a data-URI image input).
 
 from __future__ import annotations
 
-import base64
 import time
 from pathlib import Path
 
 import httpx
 
 from ...config import Settings
-from .base import GeneratedMesh, download_mesh_file
+from .base import GeneratedMesh, download_mesh_file, resized_data_uri
 
 _QUEUE_BASE = "https://queue.fal.run"
 
@@ -68,8 +67,9 @@ class FalProvider:
 
 
 def _data_uri(path: Path) -> str:
-    mime = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
-    return f"data:{mime};base64,{base64.b64encode(path.read_bytes()).decode('ascii')}"
+    # Downscale before base64 to keep the request body small and reliable
+    # (large phone photos can corrupt over some SSL stacks). See base.resized_data_uri.
+    return resized_data_uri(path)
 
 
 def _wait(client: httpx.Client, headers: dict, status_url: str, settings: Settings) -> bool:

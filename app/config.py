@@ -56,6 +56,7 @@ class Settings:
     wavespeed_api_key: str | None
     wavespeed_api_base: str
     wavespeed_model: str
+    wavespeed_multiview_model: str
     fal_api_key: str | None
     fal_model: str
     gemini_api_key: str | None
@@ -105,6 +106,11 @@ def get_settings() -> Settings:
         # Hunyuan3D on WaveSpeed. Override with e.g.
         # "wavespeed-ai/hunyuan-3d-v3.1/image-to-3d-rapid" for the faster/cheaper model.
         wavespeed_model=os.getenv("WAVESPEED_MODEL", "wavespeed-ai/hunyuan3d-v3/image-to-3d"),
+        # Multi-view model used automatically when several angle photos are
+        # uploaded: fuses named front/back/left views into one mesh.
+        wavespeed_multiview_model=os.getenv(
+            "WAVESPEED_MULTIVIEW_MODEL", "wavespeed-ai/hunyuan3d-v2-multi-view"
+        ),
         fal_api_key=os.getenv("FAL_KEY") or os.getenv("FAL_API_KEY"),
         # fal.ai hosted image-to-3D model. Hunyuan3D-2 gives strong geometry;
         # swap for "fal-ai/trellis" or "fal-ai/triposr" via env if preferred.

@@ -55,10 +55,21 @@ def resolve_order(settings: Settings) -> list[str]:
     return [choice, "silhouette"]
 
 
-def generate(image_path: str, output_dir: str, settings: Settings) -> GeneratedMesh | None:
-    """Try providers in order; return the first real mesh. Collects warnings."""
+def generate(
+    image_path: str,
+    output_dir: str,
+    settings: Settings,
+    extra_image_paths: list[str] | None = None,
+) -> GeneratedMesh | None:
+    """Try providers in order; return the first real mesh. Collects warnings.
+
+    When ``extra_image_paths`` are supplied and the chosen provider exposes a
+    ``generate_multiview`` method, the extra angles are fused into one mesh
+    (true multi-view reconstruction) instead of being discarded.
+    """
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
+    extras = [p for p in (extra_image_paths or []) if p and Path(p).exists()]
     warnings: list[str] = []
     for name in resolve_order(settings):
         provider = _REGISTRY.get(name)
@@ -66,7 +77,10 @@ def generate(image_path: str, output_dir: str, settings: Settings) -> GeneratedM
             continue
         if not provider.available(settings):
             continue
-        result = provider.generate(image_path, str(out / name), settings)
+        if extras and hasattr(provider, "generate_multiview"):
+            result = provider.generate_multiview([image_path, *extras], str(out / name), settings)
+        else:
+            result = provider.generate(image_path, str(out / name), settings)
         if result is None:
             continue
         if result.mesh_path and Path(result.mesh_path).exists():
