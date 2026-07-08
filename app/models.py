@@ -70,6 +70,13 @@ class ProcessResponse(BaseModel):
     freecad: dict[str, str] = Field(default_factory=dict)
     mesh_source: str | None = None
     mesh_is_high_fidelity: bool = False
+    # additive fields (safe for existing frontend; new consumers can read them)
+    provider: str | None = None
+    mesh_face_count: int | None = None
+    step_generated: bool = False
+    step_quality: str | None = None
+    step_method: str | None = None
+    quality_warnings: list[str] = Field(default_factory=list)
 
 
 
@@ -90,6 +97,13 @@ class JobStatusResponse(BaseModel):
     freecad: dict[str, str] = Field(default_factory=dict)
     mesh_source: str | None = None
     mesh_is_high_fidelity: bool = False
+    # additive fields
+    provider: str | None = None
+    mesh_face_count: int | None = None
+    step_generated: bool = False
+    step_quality: str | None = None
+    step_method: str | None = None
+    quality_warnings: list[str] = Field(default_factory=list)
 
 
 class CapabilitiesResponse(BaseModel):

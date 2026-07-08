@@ -5,10 +5,16 @@ import subprocess
 import sys
 from pathlib import Path
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 from PIL import Image
 
-from ..config import Settings
+if TYPE_CHECKING:
+    # Imported for type hints only. Kept out of runtime so this module can also
+    # run as a standalone subprocess worker (`python image_geometry.py --worker`),
+    # where the package-relative import would otherwise fail.
+    from ..config import Settings
 
 
 def analyze_image_geometry(

@@ -1,140 +1,151 @@
-# Photo2CAD Backend
+# image-to-3D-CAD
 
-FastAPI backend for a hackathon prototype that turns a single object image into estimated mesh files and a CAD draft.
+Turn a single object photo into a real 3D mesh (GLB/OBJ/STL) **and** a CAD STEP
+file. Next.js frontend + FastAPI backend. Heavy 3D reconstruction runs on cloud
+GPUs (Meshy / Tripo / fal), so your machine stays cool; a local, dependency-only
+engine is the offline fallback so the output is **never a box**.
 
-## Folder Structure
+## What changed / how it works now
 
-```text
-backend/
-  app/
-    main.py
-    config.py
-    models.py
-    jobs.py
-    routers/
-      upload.py
-      generate_mesh.py
-      generate_cad.py
-      files.py
-    services/
-      background.py
-      triposr_service.py
-      cad_service.py
-      mesh_service.py
-      image_geometry.py
-  storage/
-  requirements.txt
-  .env.example
+The old pipeline emitted a literal `.box()` whenever no 3D engine was configured
+(which was always, on a laptop with no GPU) — so a perfume bottle came out as a
+cuboid. That is fixed. The mesh step is now a **provider chain**:
+
 ```
+IMAGE_TO_3D_PROVIDER=auto   # first available wins:
+  meshy  ->  tripo-api  ->  fal-hunyuan3d  ->  luma  ->  csm  ->  triposr  ->  silhouette
+```
+
+- **Cloud providers** (Meshy/Tripo/fal/…) run neural reconstruction on their
+  GPUs and return a real textured mesh. Enabled by setting the matching API key.
+- **`silhouette`** is a local, offline, zero-network engine (numpy/scipy/
+  scikit-image/trimesh). It turns the background-removed silhouette into a real
+  3D solid: a **solid of revolution** for bottle/cup/vase-like shapes, or a
+  distance-transform **"inflated" pillow** for everything else. Stylized, not
+  photoreal, but always a genuine 3D shape with depth. This is the guaranteed
+  fallback — there is no `.box()` path anymore.
+- Force one engine with `IMAGE_TO_3D_PROVIDER=meshy|silhouette|mock|…`.
+
+### STEP / CAD (the priority output)
+
+Two tracks, best-first, for an AutoCAD-openable STEP — never a bounding box:
+
+1. **Gemini parametric** (`GEMINI_API_KEY`): Gemini looks at the photo and
+   returns a stack of CAD primitives (e.g. perfume = cylinder body + frustum
+   shoulder + neck + cap) with millimetre dimensions, which CadQuery turns into a
+   **clean, small, editable STEP** (~15–30 KB). Ideal for AutoCAD.
+2. **Tessellated solid** (no key needed): the reconstructed mesh is sewn into a
+   STEP solid via OpenCASCADE — faithful to the shape, faceted, larger (~5–15 MB).
+3. If neither is possible, STL/OBJ are still exported and `step_generated` is
+   `false` with a clear reason.
+
+Response metadata: `step_generated`, `step_quality`
+(`parametric_approximate` | `tessellated`), `step_method`.
+
+## API keys (all optional; put them in `.env.local`, which is gitignored)
+
+| Key | Provider | Purpose |
+|-----|----------|---------|
+| `MESHY_API_KEY` | meshy.ai (free tier) | **Recommended.** High-fidelity mesh on Meshy's GPU. |
+| `GEMINI_API_KEY` | Google AI Studio | **Recommended.** Clean parametric STEP for AutoCAD (called over REST — no SDK). |
+| `TRIPO_API_KEY` | platform.tripo3d.ai | Fallback cloud mesh provider. |
+| `FAL_KEY` (+`FAL_MODEL`) | fal.ai | Optional SOTA geometry (Hunyuan3D-2 / TRELLIS). |
+| `LUMA_API_KEY` / `CSM_API_KEY` | Luma / CSM | Optional cloud providers. |
+
+With **no keys at all**, you still get a real 3D mesh (silhouette engine) and a
+tessellated STEP. With `MESHY_API_KEY` + `GEMINI_API_KEY` you get a
+high-fidelity mesh **and** a clean parametric STEP.
+
+> Security: `.gitignore` ignores every `.env*` except `.env.example`. Never
+> commit real keys. The repo is public.
 
 ## Endpoints
 
 - `GET /health`
-- `GET /api/capabilities`
-- `POST /api/upload-image`
-- `POST /api/jobs`
-- `POST /api/jobs/{job_id}/generate-mesh`
-- `POST /api/jobs/{job_id}/generate-cad`
-- `GET /api/jobs/{job_id}`
-- `GET /api/files/{job_id}/{filename}`
+- `GET /api/capabilities` — reports which providers/keys are configured
+- `POST /api/upload` (also `POST /api/upload-image`) — upload image(s)/video
+- `POST /api/process` — synchronous: runs mesh + CAD + FreeCAD, returns everything
+- `POST /api/generate` / `POST /api/jobs` — upload + queue the full pipeline (async)
+- `POST /api/jobs/{job_id}/generate-mesh` / `.../generate-cad` — async single steps
+- `GET /api/jobs/{job_id}` — status/progress/artifacts
+- `GET /api/files/{job_id}/{filename}` (alias: `GET /api/jobs/{job_id}/artifacts/{filename}`)
 
-## Demo Flow
+### Response fields (additive; existing frontend still works)
 
-1. `POST /api/upload-image` with the user photo.
-2. Receive a `job_id`.
-3. `POST /api/jobs/{job_id}/generate-mesh`.
-4. Poll `GET /api/jobs/{job_id}` until mesh files appear.
-5. `POST /api/jobs/{job_id}/generate-cad`.
-6. Poll `GET /api/jobs/{job_id}` until CAD files appear.
-7. Download `cad.stl`, `cad.step`, `mesh.stl`, `mesh.obj`, or `mesh.glb` through `GET /api/files/{job_id}/{filename}`.
+`preview_model_url`, `files{glb,obj,stl,step,dxf,cad_stl,…}`, `freecad{step,obj}`,
+`mesh_source`, `mesh_is_high_fidelity`, `cad_summary`, `warnings`, plus new:
+`provider`, `mesh_face_count`, `step_generated`, `step_quality`, `step_method`,
+`quality_warnings`.
 
-The legacy `POST /api/jobs` endpoint still exists for a one-shot upload-and-generate flow, but the job-first flow above is the recommended frontend path.
+## Output files (`storage/jobs/{job_id}/`)
 
-## Reliability / Fallback Mode
-
-- Uploaded images are converted to `input.png` and preprocessed into `masked.png` immediately.
-- If `rembg` fails, the backend keeps going with the original image.
-- If TripoSR works, mesh output uses the real image-to-3D path.
-- If TripoSR fails, the backend falls back to a simple CadQuery solid when possible.
-- If CadQuery is also unavailable, the backend falls back again to a contour-based STL/OBJ mesh extrusion.
-- If CAD generation cannot produce `STEP`, the backend still returns `DXF` and `STL` so the demo does not die.
-
-## Processing Outline
-
-1. Save upload as `storage/jobs/{job_id}/input.png`.
-2. Remove background when available and save `masked.png`.
-3. Try TripoSR for mesh reconstruction.
-4. Fall back to a simple generated solid mesh if TripoSR is unavailable.
-5. Detect simple geometry with OpenCV.
-6. Generate a flat-part CAD draft with CadQuery when available.
-7. Fall back to DXF + STL if STEP export is unavailable.
-
-## Output Files
-
-Each job can create:
-
-- `mesh.stl`
-- `mesh.obj`
-- `mesh.glb`
-- `cad.step`
-- `cad.stl`
-- `cad.dxf`
-- `metadata.json`
+```
+input.png              # original upload (normalized to PNG)
+masked.png             # background-removed, cropped, centered
+normalized.png         # debug copy of the model-input image
+mesh.glb / .obj / .stl # the 3D model (centered, cleaned, normalized)
+cad.step               # STEP (parametric or tessellated)
+cad.stl                # solid as STL
+cad.dxf                # 2D outline drawing
+freecad.step / .obj    # FreeCAD-friendly copies
+logs/pipeline.json     # provider, face count, bbox, step quality, timings
+metadata.json          # full job record
+```
 
 ## Run
+
+Backend:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt          # CPU-only; no torch/GPU needed
+cp .env.example .env.local               # then add your keys to .env.local
 python3 -m uvicorn app.main:app --reload --port 8000
 ```
 
-## Frontend: single-port mode vs. dev mode
-
-For active frontend development (hot reload), run the frontend and backend as
-two separate processes. `lib/api.ts` defaults to a relative/same-origin API
-base URL (so the single-port build below works on any port), so for this
-two-process workflow create `.env.local` with:
-
-```
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
-```
+Frontend (dev, hot reload) — set `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`
+in `.env.local`, then:
 
 ```bash
 npm install
-npm run dev            # http://localhost:3000, calls the backend at :8000
+npm run dev            # http://localhost:3000
 ```
 
-To run the whole app — frontend and API — from a single port instead, build
-a static export once and let the backend serve it directly:
+Single-port build (frontend + API on one port):
 
 ```bash
-npm run build           # writes the static export to ./out
-python3 -m uvicorn app.main:app --port 8000
-# open http://localhost:8000 — frontend and API both live here
+npm run build          # writes ./out
+python3 -m uvicorn app.main:app --port 8000   # open http://localhost:8000
 ```
 
-`app/main.py` mounts `./out` (if present) after all `/api/*` routes, so API
-routes always take priority over the static files. Rebuild with
-`npm run build` after any frontend change to pick it up in this mode.
-
-## TripoSR
-
-TripoSR is optional because its setup can be heavy and GPU-dependent.
-
-Configure:
+### Try a sample image
 
 ```bash
-export USE_TRIPOSR=true
-export PHOTO2CAD_TRIPOSR_RUN_PY=/absolute/path/to/TripoSR/run.py
+JOB=$(curl -sF image=@perfume.jpg -F background_removal=true localhost:8000/api/upload | jq -r .job_id)
+curl -s -X POST localhost:8000/api/process -H 'content-type: application/json' \
+  -d "{\"job_id\":\"$JOB\",\"generate_mesh\":true,\"generate_cad\":true,\"generate_freecad\":true}" | jq
+# artifacts land in storage/jobs/$JOB/
 ```
 
-If TripoSR fails, the API does not crash. It falls back to a contour-based mesh.
-If CadQuery is available during fallback, it prefers a simple generated solid before dropping to raw contour extrusion.
+## Notes / known limitations
 
-## Notes
+- A single image cannot recover the truly hidden back of an object; cloud
+  providers hallucinate a plausible back, the silhouette engine assumes symmetry.
+- STEP is **approximate**: parametric (primitive fit) or tessellated (faceted),
+  not an exact CAD reverse-engineer. `step_quality` says which.
+- The local silhouette engine is stylized (reports `mesh_is_high_fidelity:false`);
+  add `MESHY_API_KEY` for photoreal geometry.
+- Mac/CPU only, no torch required. `TripoSR` remains supported if you set
+  `PHOTO2CAD_TRIPOSR_RUN_PY` to an installed checkout (needs torch).
 
-- For the first version, CAD generation uses a rectangular base plus detected holes.
-- `GET /api/jobs/{job_id}` returns progress, message, file URLs, preview URL, and CAD summary.
-- File responses use full URLs intended for frontend consumption.
+## Tests
+
+```bash
+python3 -m unittest discover -s tests -p "test_*.py"
+```
+
+`tests/test_pipeline.py` asserts the live upload→process path produces a real 3D
+mesh (face count > 12, i.e. not a box), a STEP (or a clear reason), debug
+artifacts, and that a total provider failure fails the job loudly instead of
+returning a box. Provider network calls are mocked, so tests run offline.

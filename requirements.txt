@@ -7,10 +7,18 @@ pillow
 pillow-heif
 opencv-python
 numpy
+scipy
+scikit-image
 rembg
 onnxruntime
 trimesh
+fast-simplification
 cadquery
 aiofiles
 ezdxf
 httpx
+# Gemini VLM -> parametric STEP (Track 1 CAD) is called over the REST API using
+# httpx (below) — no Google SDK needed. Just set GEMINI_API_KEY.
+# Optional: fal.ai hosted Hunyuan3D/TRELLIS. The provider uses plain HTTP, so
+# this SDK is not required — install only if you prefer the official client.
+# fal-client

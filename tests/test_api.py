@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import time
 import unittest
+from unittest import mock
 
 from fastapi.testclient import TestClient
 from PIL import Image, ImageDraw
@@ -22,6 +23,10 @@ def sample_image() -> bytes:
 class BackendApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.client = TestClient(app)
+        # Offline + fast: skip the live Gemini CAD call during tests.
+        patcher = mock.patch("app.services.cad_service.analyze_object", return_value=None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_health(self) -> None:
         response = self.client.get("/health")

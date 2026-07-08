@@ -33,6 +33,7 @@ class Settings:
     storage_root: Path
     backend_base_url: str | None
     cors_origins: list[str]
+    image_to_3d_provider: str
     use_triposr: bool
     triposr_run_py: str | None
     triposr_python_bin: str
@@ -52,6 +53,11 @@ class Settings:
     tripo_api_base: str
     meshy_api_key: str | None
     meshy_api_base: str
+    fal_api_key: str | None
+    fal_model: str
+    gemini_api_key: str | None
+    gemini_model: str
+    enable_gemini_cad: bool
     reconstruction_timeout_seconds: int
     max_upload_images: int
     max_video_frames: int
@@ -69,6 +75,9 @@ def get_settings() -> Settings:
         storage_root=storage_root,
         backend_base_url=os.getenv("BACKEND_BASE_URL"),
         cors_origins=_env_list("CORS_ORIGINS", ["*"]),
+        # "auto" = first available provider wins (cloud first, then the local
+        # offline silhouette engine). Never falls back to a plain box.
+        image_to_3d_provider=os.getenv("IMAGE_TO_3D_PROVIDER", "auto").strip().lower(),
         use_triposr=_env_bool("USE_TRIPOSR", True),
         triposr_run_py=os.getenv("PHOTO2CAD_TRIPOSR_RUN_PY"),
         triposr_python_bin=os.getenv("PHOTO2CAD_TRIPOSR_PYTHON_BIN", "python"),
@@ -88,6 +97,13 @@ def get_settings() -> Settings:
         tripo_api_base=os.getenv("TRIPO_API_BASE", "https://api.tripo3d.ai/v2"),
         meshy_api_key=os.getenv("MESHY_API_KEY"),
         meshy_api_base=os.getenv("MESHY_API_BASE", "https://api.meshy.ai/openapi/v1"),
+        fal_api_key=os.getenv("FAL_KEY") or os.getenv("FAL_API_KEY"),
+        # fal.ai hosted image-to-3D model. Hunyuan3D-2 gives strong geometry;
+        # swap for "fal-ai/trellis" or "fal-ai/triposr" via env if preferred.
+        fal_model=os.getenv("FAL_MODEL", "fal-ai/hunyuan3d/v2"),
+        gemini_api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"),
+        gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+        enable_gemini_cad=_env_bool("ENABLE_GEMINI_CAD", True),
         reconstruction_timeout_seconds=int(os.getenv("RECONSTRUCTION_TIMEOUT_SECONDS", "600")),
         max_upload_images=int(os.getenv("MAX_UPLOAD_IMAGES", "20")),
         max_video_frames=int(os.getenv("MAX_VIDEO_FRAMES", "12")),

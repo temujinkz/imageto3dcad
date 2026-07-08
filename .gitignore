@@ -9,8 +9,10 @@ node_modules/
 out/
 *.tsbuildinfo
 
+# secrets — ignore every .env variant except the checked-in placeholder example
 .env
-.env*.local
+.env.*
+!.env.example
 
 npm-debug.log*
 yarn-debug.log*

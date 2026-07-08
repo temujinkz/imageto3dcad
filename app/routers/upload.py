@@ -15,6 +15,7 @@ from ..services.cad_service import generate_flat_part_cad
 from ..services.freecad_service import prepare_freecad_exports
 from ..services.image_convert import SUPPORTED_EXTENSIONS, VIDEO_EXTENSIONS, save_upload_as_png
 from ..services.mesh_service import generate_mesh_assets
+from ..services import quality
 from ..services.video_frames import extract_key_frames
 
 
@@ -151,6 +152,15 @@ def build_router(store: JobStore, settings: Settings) -> APIRouter:
             message="Upload complete. Full pipeline queued.",
             status_url=str(request.url_for("get_job", job_id=upload_response.job_id)),
         )
+
+    @router.post("/generate", response_model=JobAcceptedResponse, status_code=202)
+    async def generate_alias(
+        request: Request,
+        image: UploadFile = File(...),
+        background_removal: bool = Form(True),
+    ) -> JobAcceptedResponse:
+        # Brief-requested alias: upload + queue the full mesh+CAD pipeline.
+        return await create_job_and_run_all(request=request, image=image, background_removal=background_removal)
 
     @router.get("/jobs/{job_id}", response_model=JobStatusResponse, name="get_job")
     def get_job(job_id: str, request: Request) -> JobStatusResponse:
@@ -326,6 +336,13 @@ def _run_generation_job_unsafe(
     cad_step_path: str | None = None
     freecad_exports: dict[str, str] = {}
     mesh_source = job.get("mesh_source")
+    mesh_is_high_fidelity = bool(job.get("mesh_is_high_fidelity", False))
+    mesh_face_count = job.get("mesh_face_count")
+    step_generated = bool(job.get("step_generated", False))
+    step_quality = job.get("step_quality")
+    step_method = job.get("step_method")
+    quality_warnings: list[str] = list(job.get("quality_warnings", []))
+    pipeline_log: dict = {"provider": settings.image_to_3d_provider}
 
     if run_mesh:
         job = store.update(job_id, progress=0.45, message="Generating 3D mesh")
@@ -355,9 +372,34 @@ def _run_generation_job_unsafe(
         mesh_obj_path = mesh.get("obj_path")
         preview_model_path = mesh.get("preview_model_path") or preview_model_path
         mesh_source = mesh.get("source")
+        mesh_is_high_fidelity = bool(mesh.get("is_high_fidelity", False))
+        mesh_face_count = mesh.get("face_count")
+        pipeline_log.update(
+            {
+                "mesh_source": mesh_source,
+                "mesh_face_count": mesh_face_count,
+                "mesh_vertex_count": mesh.get("vertex_count"),
+                "bbox_size": mesh.get("bbox_size"),
+            }
+        )
+
+        # quality gates — fail loudly instead of shipping a degenerate/box result
+        if not quality.has_any_mesh(mesh):
+            return store.update(
+                job_id, status="failed", progress=1.0, message="3D generation failed",
+                error="No 3D mesh was produced (all providers failed). Check API keys / logs.",
+            )
+        if quality.is_degenerate(mesh):
+            return store.update(
+                job_id, status="failed", progress=1.0, message="3D generation failed",
+                error="Generated mesh is degenerate (a bounding-box dimension is ~0).",
+            )
+        for warning in quality.evaluate_mesh(mesh):
+            quality_warnings.append(warning)
+            store.append_warning(job_id, warning)
 
     if run_cad:
-        job = store.update(job_id, progress=0.7, message="Generating CAD draft")
+        job = store.update(job_id, progress=0.7, message="Generating CAD / STEP")
         cad = generate_flat_part_cad(
             image_path=masked_path,
             output_dir=Path(job["job_dir"]),
@@ -365,6 +407,7 @@ def _run_generation_job_unsafe(
             known_height_mm=known_height_mm,
             thickness_mm=thickness_mm,
             settings=settings,
+            mesh_path=mesh_stl_path,
         )
         for warning in cad.get("warnings", []):
             store.append_warning(job_id, warning)
@@ -381,7 +424,13 @@ def _run_generation_job_unsafe(
         )
         cad_summary = cad.get("cad_summary")
         cad_step_path = cad.get("step_path")
+        step_generated = bool(cad.get("step_generated", False))
+        step_quality = cad.get("step_quality")
+        step_method = cad.get("step_method")
         preview_model_path = preview_model_path or cad.get("preview_model_path")
+        pipeline_log.update(
+            {"step_generated": step_generated, "step_quality": step_quality, "step_method": step_method}
+        )
 
     if run_freecad:
         job = store.update(job_id, progress=0.85, message="Preparing FreeCAD exports")
@@ -401,6 +450,9 @@ def _run_generation_job_unsafe(
             freecad_exports["obj"] = freecad["obj_path"]
 
     store.set_outputs(job_id, outputs)
+    job_dir = Path(job["job_dir"])
+    quality.save_debug_images(job_dir)
+    quality.write_pipeline_log(job_dir, pipeline_log)
     return store.update(
         job_id,
         status="completed",
@@ -412,6 +464,12 @@ def _run_generation_job_unsafe(
         freecad=freecad_exports,
         error=None,
         mesh_source=mesh_source,
+        mesh_is_high_fidelity=mesh_is_high_fidelity,
+        mesh_face_count=mesh_face_count,
+        step_generated=step_generated,
+        step_quality=step_quality,
+        step_method=step_method,
+        quality_warnings=quality_warnings,
     )
 
 
@@ -457,7 +515,7 @@ def _completion_message(*, run_mesh: bool, run_cad: bool) -> str:
     return "Job completed"
 
 
-HIGH_FIDELITY_MESH_SOURCES = {"triposr", "luma", "csm", "tripo-api", "meshy"}
+HIGH_FIDELITY_MESH_SOURCES = {"triposr", "luma", "csm", "tripo-api", "meshy", "fal-hunyuan3d"}
 
 
 def _serialize_process(job: dict, request: Request, settings: Settings) -> ProcessResponse:
@@ -474,6 +532,12 @@ def _serialize_process(job: dict, request: Request, settings: Settings) -> Proce
         freecad=serialized.freecad,
         mesh_source=serialized.mesh_source,
         mesh_is_high_fidelity=serialized.mesh_is_high_fidelity,
+        provider=serialized.provider,
+        mesh_face_count=serialized.mesh_face_count,
+        step_generated=serialized.step_generated,
+        step_quality=serialized.step_quality,
+        step_method=serialized.step_method,
+        quality_warnings=serialized.quality_warnings,
     )
 
 
@@ -514,6 +578,12 @@ def _serialize_job(job: dict, request: Request, settings: Settings) -> JobStatus
         freecad_urls["obj"] = _file_url(job["job_id"], "freecad.obj", request, settings)
 
     mesh_source = job.get("mesh_source")
+    stored_high_fidelity = job.get("mesh_is_high_fidelity")
+    is_high_fidelity = (
+        bool(stored_high_fidelity)
+        if stored_high_fidelity is not None
+        else mesh_source in HIGH_FIDELITY_MESH_SOURCES
+    )
     return JobStatusResponse(
         job_id=job["job_id"],
         status=job["status"],
@@ -528,9 +598,15 @@ def _serialize_job(job: dict, request: Request, settings: Settings) -> JobStatus
         input_image_url=_file_url(job["job_id"], "input.png", request, settings),
         masked_image_url=_file_url(job["job_id"], "masked.png", request, settings),
         mesh_source=mesh_source,
-        mesh_is_high_fidelity=mesh_source in HIGH_FIDELITY_MESH_SOURCES,
+        mesh_is_high_fidelity=is_high_fidelity,
         error=job.get("error"),
         freecad=freecad_urls,
+        provider=job.get("provider") or settings.image_to_3d_provider,
+        mesh_face_count=job.get("mesh_face_count"),
+        step_generated=bool(job.get("step_generated", False)),
+        step_quality=job.get("step_quality"),
+        step_method=job.get("step_method"),
+        quality_warnings=job.get("quality_warnings", []),
     )
 
 

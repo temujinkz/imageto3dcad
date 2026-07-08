@@ -9,14 +9,13 @@ from ..config import Settings
 from ..jobs import JobStore
 
 
-ALLOWED_SUFFIXES = {".stl", ".obj", ".glb", ".step", ".dxf", ".png", ".jpg", ".jpeg"}
+ALLOWED_SUFFIXES = {".stl", ".obj", ".glb", ".gltf", ".step", ".dxf", ".png", ".jpg", ".jpeg", ".json"}
 
 
 def build_router(store: JobStore, settings: Settings) -> APIRouter:
     router = APIRouter(tags=["files"])
 
-    @router.get("/files/{job_id}/{filename}")
-    def get_file(job_id: str, filename: str) -> FileResponse:
+    def _serve(job_id: str, filename: str) -> FileResponse:
         job = store.get(job_id)
         if not job:
             raise HTTPException(status_code=404, detail="Invalid job ID")
@@ -30,6 +29,15 @@ def build_router(store: JobStore, settings: Settings) -> APIRouter:
             raise HTTPException(status_code=404, detail="Missing file")
         return FileResponse(path, media_type=_media_type(path), filename=path.name)
 
+    @router.get("/files/{job_id}/{filename}")
+    def get_file(job_id: str, filename: str) -> FileResponse:
+        return _serve(job_id, filename)
+
+    # Alias requested in the brief: GET /api/jobs/{id}/artifacts/{filename}
+    @router.get("/jobs/{job_id}/artifacts/{filename}")
+    def get_artifact(job_id: str, filename: str) -> FileResponse:
+        return _serve(job_id, filename)
+
     return router
 
 
@@ -41,6 +49,8 @@ def _media_type(path: Path) -> str:
         ".stl": "model/stl",
         ".obj": "model/obj",
         ".glb": "model/gltf-binary",
+        ".gltf": "model/gltf+json",
         ".step": "model/step",
         ".dxf": "image/vnd.dxf",
+        ".json": "application/json",
     }.get(path.suffix.lower(), "application/octet-stream")

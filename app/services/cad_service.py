@@ -1,12 +1,23 @@
+"""CAD / STEP generation.
+
+Priority output for this project. Two tracks, best-first, and never a box:
+  Track 1 — Gemini VLM -> parametric primitives -> clean, editable STEP (ideal
+            for AutoCAD). Requires GEMINI_API_KEY.
+  Track 2 — reconstructed mesh -> tessellated STEP solid (faithful, faceted).
+  Fallback — STL/OBJ only with step_generated=False and a clear reason.
+
+A 2D DXF outline is always emitted as a bonus (legit flat drawing).
+"""
+
 from __future__ import annotations
 
-import importlib
 import shutil
 from pathlib import Path
 
+from ..cad import build_step
+from ..cad.gemini_cad import analyze_object
 from ..config import Settings, get_settings
 from .image_geometry import analyze_image_geometry
-from .mesh_service import generate_mesh_assets
 
 
 def generate_flat_part_cad(
@@ -16,6 +27,7 @@ def generate_flat_part_cad(
     known_height_mm=None,
     thickness_mm=5,
     settings: Settings | None = None,
+    mesh_path: str | None = None,
 ) -> dict:
     settings = settings or get_settings()
     output_dir = Path(output_dir)
@@ -33,52 +45,43 @@ def generate_flat_part_cad(
     thickness_value = float(geometry["estimated_dimensions_mm"]["thickness"])
     warnings = list(geometry.get("warnings", []))
 
-    if not geometry["detected_outline"]:
-        width_mm = float(known_width_mm or settings.default_width_mm)
-        height_mm = float(known_height_mm or settings.default_height_mm)
-        warnings.append(
-            "Contour detection failed, using a simple rectangular fallback plate with two holes."
-        )
-
+    # 2D outline drawing (always available, cheap, genuinely useful)
     dxf_path = output_dir / "cad.dxf"
     _write_dxf(dxf_path, width_mm, height_mm, _holes_in_mm(geometry, width_mm, height_mm))
 
-    result = {
+    result: dict = {
         "step_path": None,
         "stl_path": None,
         "dxf_path": str(dxf_path),
+        "step_generated": False,
+        "step_quality": None,
+        "step_method": None,
+        "object_class": None,
         "warnings": warnings,
     }
 
-    try:
-        cadquery = importlib.import_module("cadquery")
-        model = _build_model(
-            cadquery=cadquery,
-            width_mm=width_mm,
-            height_mm=height_mm,
-            thickness_mm=thickness_value,
-            holes=_holes_in_mm(geometry, width_mm, height_mm),
-        )
-        step_path = output_dir / "cad.step"
-        stl_path = output_dir / "cad.stl"
-        cadquery.exporters.export(model, str(step_path))
-        cadquery.exporters.export(model, str(stl_path))
-        result["step_path"] = str(step_path)
-        result["stl_path"] = str(stl_path)
-    except Exception as exc:
-        warnings.append(f"CadQuery export failed, using STL mesh fallback only: {exc}")
-        mesh = generate_mesh_assets(
-            image_path=image_path,
-            output_dir=output_dir,
-            settings=settings,
-            known_width_mm=known_width_mm or width_mm,
-            known_height_mm=known_height_mm or height_mm,
-            thickness_mm=thickness_value,
-        )
-        if mesh.get("stl_path"):
-            fallback_stl = output_dir / "cad.stl"
-            shutil.copyfile(mesh["stl_path"], fallback_stl)
-            result["stl_path"] = str(fallback_stl)
+    cad = _build_step(image_path, output_dir, mesh_path, settings)
+    if cad:
+        result.update({k: cad.get(k, result.get(k)) for k in
+                       ("step_path", "stl_path", "step_generated", "step_quality", "step_method", "object_class")})
+        result["warnings"] = warnings + cad.get("warnings", [])
+    else:
+        # No STEP could be produced — still hand back a solid mesh as cad.stl so
+        # the CAD download is never empty, and say so honestly.
+        fallback_stl = _copy_mesh_stl(output_dir, mesh_path)
+        if fallback_stl:
+            result["stl_path"] = fallback_stl
+        result["warnings"] = warnings + [
+            "Could not generate a STEP file (no Gemini key and mesh tessellation unavailable). "
+            "Providing STL/OBJ mesh exports instead — import those into your CAD tool."
+        ]
+
+    # Always leave a solid STL alongside the CAD outputs (parametric track already
+    # writes one; tessellated/none tracks copy the reconstructed mesh).
+    if not result.get("stl_path"):
+        copied = _copy_mesh_stl(output_dir, mesh_path)
+        if copied:
+            result["stl_path"] = copied
 
     result["cad_summary"] = {
         "detected_outline": bool(geometry["detected_outline"]),
@@ -93,13 +96,46 @@ def generate_flat_part_cad(
     return result
 
 
-def _build_model(cadquery, width_mm: float, height_mm: float, thickness_mm: float, holes: list[dict]):
-    model = cadquery.Workplane("XY").box(width_mm, height_mm, thickness_mm)
-    if holes:
-        points = [(hole["x"], hole["y"]) for hole in holes]
-        diameter = max(min(hole["diameter"] for hole in holes), 1.0)
-        model = model.faces(">Z").workplane().pushPoints(points).hole(diameter)
-    return model
+def _build_step(image_path, output_dir: Path, mesh_path: str | None, settings: Settings) -> dict | None:
+    # Track 1: Gemini parametric primitives -> clean STEP
+    if settings.enable_gemini_cad and settings.gemini_api_key:
+        spec = analyze_object(image_path, settings)
+        if spec:
+            cad = build_step.build_from_primitives(spec, output_dir)
+            if cad:
+                return cad
+
+    # Track 2: reconstructed mesh -> tessellated STEP solid
+    source_mesh = _resolve_mesh_path(output_dir, mesh_path)
+    if source_mesh:
+        cad = build_step.mesh_to_step(source_mesh, output_dir)
+        if cad:
+            return cad
+    return None
+
+
+def _resolve_mesh_path(output_dir: Path, mesh_path: str | None) -> str | None:
+    if mesh_path and Path(mesh_path).exists():
+        return mesh_path
+    for name in ("mesh.stl", "mesh.obj", "mesh.glb"):
+        candidate = output_dir / name
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
+def _copy_mesh_stl(output_dir: Path, mesh_path: str | None) -> str | None:
+    source = _resolve_mesh_path(output_dir, mesh_path)
+    if not source or not source.endswith(".stl"):
+        source = str(output_dir / "mesh.stl") if (output_dir / "mesh.stl").exists() else None
+    if not source:
+        return None
+    destination = output_dir / "cad.stl"
+    try:
+        shutil.copyfile(source, destination)
+        return str(destination)
+    except Exception:
+        return None
 
 
 def _holes_in_mm(geometry: dict, width_mm: float, height_mm: float) -> list[dict]:
@@ -114,11 +150,6 @@ def _holes_in_mm(geometry: dict, width_mm: float, height_mm: float) -> list[dict
         y = (((bbox_height / 2) - center_y_px) / bbox_height) * height_mm
         diameter = max((radius_px * 2 / bbox_width) * width_mm, 1.0)
         holes.append({"x": round(x, 2), "y": round(y, 2), "diameter": round(diameter, 2)})
-    if not holes and not geometry.get("detected_outline"):
-        holes = [
-            {"x": round(-width_mm * 0.25, 2), "y": 0.0, "diameter": round(width_mm * 0.12, 2)},
-            {"x": round(width_mm * 0.25, 2), "y": 0.0, "diameter": round(width_mm * 0.12, 2)},
-        ]
     return holes
 
 
@@ -127,36 +158,10 @@ def _write_dxf(path: Path, width_mm: float, height_mm: float, holes: list[dict])
     right = width_mm / 2
     bottom = -height_mm / 2
     top = height_mm / 2
-    rows = [
-        "0",
-        "SECTION",
-        "2",
-        "ENTITIES",
-        "0",
-        "LWPOLYLINE",
-        "8",
-        "0",
-        "90",
-        "4",
-        "70",
-        "1",
-    ]
+    rows = ["0", "SECTION", "2", "ENTITIES", "0", "LWPOLYLINE", "8", "0", "90", "4", "70", "1"]
     for x, y in [(left, bottom), (right, bottom), (right, top), (left, top)]:
         rows.extend(["10", f"{x:.6f}", "20", f"{y:.6f}"])
     for hole in holes:
-        rows.extend(
-            [
-                "0",
-                "CIRCLE",
-                "8",
-                "0",
-                "10",
-                f"{hole['x']:.6f}",
-                "20",
-                f"{hole['y']:.6f}",
-                "40",
-                f"{(hole['diameter'] / 2):.6f}",
-            ]
-        )
+        rows.extend(["0", "CIRCLE", "8", "0", "10", f"{hole['x']:.6f}", "20", f"{hole['y']:.6f}", "40", f"{(hole['diameter'] / 2):.6f}"])
     rows.extend(["0", "ENDSEC", "0", "EOF"])
     path.write_text("\n".join(rows) + "\n", encoding="utf-8")
