@@ -42,9 +42,9 @@ export function ModelViewer({ modelUrl, meshSource, meshIsHighFidelity, busy, bu
           type="button"
           onClick={() => setResetKey((value) => value + 1)}
           disabled={!canPreview}
-          className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3 py-1.5 text-xs font-medium text-muted transition hover:text-ink disabled:opacity-40"
+          className="group inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3 py-1.5 text-xs font-medium text-muted transition duration-200 hover:border-accent/40 hover:text-ink disabled:opacity-40"
         >
-          <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+          <RotateCcw className="h-3.5 w-3.5 transition-transform duration-500 group-hover:-rotate-180" aria-hidden />
           Reset view
         </button>
       </div>

@@ -93,19 +93,19 @@ export function UploadZone({
           role="button"
           tabIndex={0}
           onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && openPicker()}
-          className={`flex min-h-[300px] cursor-pointer flex-col items-center justify-center rounded-[14px] border border-dashed px-6 text-center transition ${
+          className={`group flex min-h-[300px] cursor-pointer flex-col items-center justify-center rounded-[14px] border border-dashed px-6 text-center transition duration-200 hover:shadow-card ${
             dragActive ? "border-accent bg-accent/5" : "border-line bg-bone/60 hover:border-accent/60 hover:bg-bone"
           }`}
         >
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 text-accent">
-            <ImagePlus className="h-7 w-7" aria-hidden />
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 text-accent transition-all duration-300 group-hover:-translate-y-1 group-hover:scale-105 group-hover:bg-accent/15">
+            <ImagePlus className="h-7 w-7 transition-transform duration-300 group-hover:rotate-6" aria-hidden />
           </div>
           <p className="text-lg font-semibold tracking-tight text-ink">Drop your photos here</p>
           <p className="mt-1.5 max-w-sm text-sm leading-6 text-muted">
             A few angles work best. You can also drop a short video of the object if you have one.
           </p>
-          <span className="mt-5 inline-flex items-center gap-2 rounded-full border border-line bg-card px-4 py-2 text-sm font-medium text-ink">
-            <Plus className="h-4 w-4" aria-hidden /> Pick files
+          <span className="mt-5 inline-flex items-center gap-2 rounded-full border border-line bg-card px-4 py-2 text-sm font-medium text-ink transition-colors duration-200 group-hover:border-accent/50 group-hover:text-accent">
+            <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" aria-hidden /> Pick files
           </span>
         </div>
       ) : (
@@ -119,19 +119,23 @@ export function UploadZone({
               {previewUrls.slice(0, 10).map((url, index) => (
                 <div
                   key={url}
-                  className="relative aspect-square overflow-hidden rounded-xl border border-line bg-bone"
+                  className="group relative aspect-square overflow-hidden rounded-xl border border-line bg-bone transition duration-200 hover:-translate-y-1 hover:border-accent/40 hover:shadow-md"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt={`Angle ${index + 1}`} className="h-full w-full object-cover" />
+                  <img
+                    src={url}
+                    alt={`Angle ${index + 1}`}
+                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
+                  />
                 </div>
               ))}
               {!busy && (
                 <button
                   type="button"
                   onClick={openPicker}
-                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-line bg-bone/60 text-muted transition hover:border-accent/60 hover:text-accent"
+                  className="group flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-line bg-bone/60 text-muted transition duration-200 hover:-translate-y-1 hover:border-accent/60 hover:text-accent"
                 >
-                  <Plus className="h-5 w-5" aria-hidden />
+                  <Plus className="h-5 w-5 transition-transform duration-300 group-hover:rotate-90" aria-hidden />
                   <span className="text-xs font-medium">Add</span>
                 </button>
               )}
@@ -144,9 +148,9 @@ export function UploadZone({
                 type="button"
                 onClick={onReset}
                 disabled={busy}
-                className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-2 text-sm font-medium text-muted transition hover:text-ink disabled:opacity-50"
+                className="group inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-2 text-sm font-medium text-muted transition duration-200 hover:border-accent/40 hover:text-ink disabled:opacity-50"
               >
-                <X className="h-3.5 w-3.5" aria-hidden /> Clear
+                <X className="h-3.5 w-3.5 transition-transform duration-300 group-hover:rotate-90" aria-hidden /> Clear
               </button>
               <span className="text-sm text-muted">
                 {isVideo ? "Video ready" : `${previewUrls.length} photo${previewUrls.length > 1 ? "s" : ""}`}

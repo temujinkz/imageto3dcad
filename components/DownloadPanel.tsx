@@ -108,13 +108,13 @@ function Chip({ href, label, accent }: { href: string; label: string; accent?: b
       download
       target="_blank"
       rel="noreferrer"
-      className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${
+      className={`group inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition duration-200 hover:-translate-y-0.5 hover:shadow-md ${
         accent
           ? "border-accent/40 bg-accent/10 text-accent hover:bg-accent/15"
           : "border-line bg-card text-ink hover:border-accent/50 hover:text-accent"
       }`}
     >
-      <Download className="h-4 w-4" aria-hidden />
+      <Download className="h-4 w-4 transition-transform duration-200 group-hover:translate-y-0.5" aria-hidden />
       {label}
     </a>
   );
