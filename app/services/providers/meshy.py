@@ -36,9 +36,16 @@ class MeshyProvider:
                     headers=headers,
                     json={
                         "image_url": data_uri,
-                        "enable_pbr": False,
+                        # Maximum-detail settings: latest model, PBR textures for
+                        # realistic material response, high polycount for dense
+                        # geometry, and remeshing to clean triangle topology.
+                        "ai_model": settings.meshy_ai_model,
+                        "enable_pbr": True,
                         "should_texture": True,
                         "should_remesh": True,
+                        "topology": "triangle",
+                        "target_polycount": settings.meshy_target_polycount,
+                        "symmetry_mode": "auto",
                     },
                 )
                 if create.status_code >= 400:

@@ -53,6 +53,8 @@ class Settings:
     tripo_api_base: str
     meshy_api_key: str | None
     meshy_api_base: str
+    meshy_ai_model: str
+    meshy_target_polycount: int
     wavespeed_api_key: str | None
     wavespeed_api_base: str
     wavespeed_model: str
@@ -101,6 +103,8 @@ def get_settings() -> Settings:
         tripo_api_base=os.getenv("TRIPO_API_BASE", "https://api.tripo3d.ai/v2"),
         meshy_api_key=os.getenv("MESHY_API_KEY"),
         meshy_api_base=os.getenv("MESHY_API_BASE", "https://api.meshy.ai/openapi/v1"),
+        meshy_ai_model=os.getenv("MESHY_AI_MODEL", "latest"),
+        meshy_target_polycount=int(os.getenv("MESHY_TARGET_POLYCOUNT", "300000")),
         wavespeed_api_key=os.getenv("WAVESPEED_API_KEY"),
         wavespeed_api_base=os.getenv("WAVESPEED_API_BASE", "https://api.wavespeed.ai/api/v3"),
         # Hunyuan3D on WaveSpeed. Override with e.g.

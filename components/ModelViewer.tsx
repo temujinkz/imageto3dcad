@@ -141,8 +141,10 @@ function enrichObject(root: THREE.Object3D) {
       if (hasVertexColors) std.vertexColors = true;
       const map = std.map as THREE.Texture | null;
       if (map) map.colorSpace = THREE.SRGBColorSpace;
-      // Reconstructed meshes look best as matte-ish surfaces, not shiny plastic.
-      if (std.metalness !== undefined && std.metalness > 0.5) std.metalness = 0.1;
+      // Only tame shininess on untextured reconstructions; when a real texture
+      // map is present (e.g. Meshy PBR) trust its material values so the
+      // regenerated textures render at full clarity.
+      if (!map && std.metalness !== undefined && std.metalness > 0.5) std.metalness = 0.1;
       std.needsUpdate = true;
     });
   });
