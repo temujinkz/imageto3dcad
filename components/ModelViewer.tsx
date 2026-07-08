@@ -6,8 +6,9 @@ import { Bounds, Center, Html, OrbitControls, useGLTF } from "@react-three/drei"
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { useLoader } from "@react-three/fiber";
-import { Box, Loader2, RotateCcw } from "lucide-react";
+import { Box, RotateCcw } from "lucide-react";
 import * as THREE from "three";
+import { BouncingLogo } from "@/components/BouncingLogo";
 
 type ModelViewerProps = {
   modelUrl?: string;
@@ -55,7 +56,7 @@ export function ModelViewer({ modelUrl, meshIsHighFidelity, warnings, busy, busy
 
       {canPreview && note && <p className="mb-3 text-xs leading-5 text-muted">{note}</p>}
 
-      <div className="h-[480px] touch-none overflow-hidden rounded-[14px] border border-line bg-bone">
+      <div className="relative h-[480px] touch-none overflow-hidden rounded-[14px] border border-line bg-bone">
         {canPreview && modelUrl ? (
           <Canvas
             key={`${modelUrl}-${resetKey}`}
@@ -92,11 +93,13 @@ export function ModelViewer({ modelUrl, meshIsHighFidelity, warnings, busy, busy
             />
           </Canvas>
         ) : busy ? (
-          <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-            <Loader2 className="mb-3 h-8 w-8 animate-spin text-accent" aria-hidden />
-            <p className="text-base font-semibold text-ink">{busyLabel ?? "Working on it"}</p>
-            <p className="mt-1.5 text-sm text-muted">The 3D and CAD steps take a little while. Hang tight.</p>
-          </div>
+          <>
+            <BouncingLogo size={64} />
+            <div className="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center">
+              <p className="text-base font-semibold text-ink">{busyLabel ?? "Working on it"}</p>
+              <p className="mt-1.5 text-sm text-muted">The 3D and CAD steps take a little while. Hang tight.</p>
+            </div>
+          </>
         ) : (
           <div className="flex h-full flex-col items-center justify-center px-6 text-center">
             <Box className="mb-3 h-9 w-9 text-muted/60" aria-hidden />
