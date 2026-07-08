@@ -11,10 +11,11 @@ const EXPORTS: { label: string; keys: string[]; accent?: boolean }[] = [
   // Mesh STL is the detailed 3D scan (matches the preview); cad_stl is the fallback.
   { label: "STL", keys: ["stl", "cad_stl"] },
   { label: "DXF", keys: ["dxf"] },
-  // TODO: the backend has no dedicated AutoCAD/DWG artifact yet. STEP is the
-  // AutoCAD-ready format (AutoCAD imports STEP natively); DXF is the 2D fallback.
-  // Wire this to a real DWG export once the backend can produce one.
-  { label: "Export to AutoCAD", keys: ["step", "dxf"], accent: true }
+  // "Open in app" actions. Both AutoCAD and FreeCAD open STEP natively, so both
+  // hand over the STEP solid. TODO: no dedicated AutoCAD/DWG artifact yet; wire
+  // "Open AutoCAD" to a real DWG export once the backend can produce one.
+  { label: "Open AutoCAD", keys: ["step", "dxf"], accent: true },
+  { label: "Open FreeCAD", keys: ["freecad_step", "step"], accent: true }
 ];
 
 function resolveHref(files: Record<string, string>, keys: string[]): string | undefined {

@@ -73,7 +73,7 @@ export function ModelViewer({ modelUrl, meshIsHighFidelity, warnings, busy, busy
             <directionalLight position={[5, 8, 6]} intensity={2.1} castShadow={false} />
             <directionalLight position={[-6, 3, -4]} intensity={0.7} />
             <Suspense fallback={<LoaderFallback />}>
-              <Bounds fit margin={1.2}>
+              <Bounds fit observe margin={1.2}>
                 <Center>
                   <Model url={modelUrl} extension={extension ?? ""} />
                 </Center>
