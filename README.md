@@ -24,7 +24,7 @@ IMAGE_TO_3D_PROVIDER=auto   # first available wins:
   distance-transform **"inflated" pillow** for everything else. Stylized, not
   photoreal, but always a genuine 3D shape with depth. This is the guaranteed
   fallback — there is no `.box()` path anymore.
-- Force one engine with `IMAGE_TO_3D_PROVIDER=meshy|silhouette|mock|…`.
+- Force one engine withh `IMAGE_TO_3D_PROVIDER=meshy|silhouette|mock|…`.
 
 ### STEP / CAD (the priority output)
 
