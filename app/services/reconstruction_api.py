@@ -188,16 +188,13 @@ def _wavespeed_reconstruct(image_paths: list[Path], output_dir: Path, settings: 
                 return None
             data = create.json().get("data", {})
             task_id = data.get("id")
-            poll_url = data.get("urls", {}).get("get")
             if not task_id:
                 return None
 
-            download_url = _poll_wavespeed(
-                client,
-                headers,
-                poll_url or f"{settings.wavespeed_api_base}/predictions/{task_id}/result",
-                settings,
-            )
+            # WaveSpeed's returned poll URL (data.urls.get) has a malformed
+            # double slash ("ai//api/...") that 404s, so construct it ourselves.
+            poll_url = f"{settings.wavespeed_api_base}/predictions/{task_id}/result"
+            download_url = _poll_wavespeed(client, headers, poll_url, settings)
             if not download_url:
                 return None
             return _download_mesh(download_url, output_dir, source="wavespeed")

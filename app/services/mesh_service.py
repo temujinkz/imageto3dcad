@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -38,12 +39,20 @@ def generate_mesh_assets(
 
     tripo = reconstruct_from_images(image_paths, output_dir / "reconstruction", settings)
     if any(tripo.get(key) for key in ("stl_path", "obj_path", "glb_path")):
+        # Reconstruction writes into output_dir/reconstruction/, but the file
+        # endpoint and job serializer serve mesh.* from the job root, so
+        # promote the produced meshes up to the root under their canonical names.
+        promoted = {
+            "stl_path": _promote_to_root(tripo.get("stl_path"), output_dir, "mesh.stl"),
+            "obj_path": _promote_to_root(tripo.get("obj_path"), output_dir, "mesh.obj"),
+            "glb_path": _promote_to_root(tripo.get("glb_path"), output_dir, "mesh.glb"),
+        }
         return {
             "source": tripo.get("source", "triposr"),
-            "stl_path": tripo.get("stl_path"),
-            "obj_path": tripo.get("obj_path"),
-            "glb_path": tripo.get("glb_path"),
-            "preview_model_path": tripo.get("glb_path") or tripo.get("obj_path") or tripo.get("stl_path"),
+            "stl_path": promoted["stl_path"],
+            "obj_path": promoted["obj_path"],
+            "glb_path": promoted["glb_path"],
+            "preview_model_path": promoted["glb_path"] or promoted["obj_path"] or promoted["stl_path"],
             "warnings": warnings + tripo.get("warnings", []),
             "geometry": geometry,
         }
@@ -76,6 +85,22 @@ def generate_mesh_assets(
     fallback["warnings"] = warnings + tripo.get("warnings", []) + fallback.get("warnings", [])
     fallback["geometry"] = geometry
     return fallback
+
+
+def _promote_to_root(src_path: str | None, output_dir: Path, dest_name: str) -> str | None:
+    """Copies a reconstruction output up to the job root under a canonical
+    name, so the file endpoint (which serves job_dir/<name>) can find it.
+    Returns the new path, or None if there was nothing to copy."""
+    if not src_path:
+        return None
+    src = Path(src_path)
+    if not src.exists():
+        return None
+    dest = output_dir / dest_name
+    if src.resolve() == dest.resolve():
+        return str(dest)
+    shutil.copyfile(src, dest)
+    return str(dest)
 
 
 def _generate_cadquery_fallback_mesh(

@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import time
 import unittest
+from unittest import mock
 
 from fastapi.testclient import TestClient
 from PIL import Image, ImageDraw
@@ -22,6 +23,15 @@ def sample_image() -> bytes:
 class BackendApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.client = TestClient(app)
+        # Keep tests hermetic and fast: never hit real cloud reconstruction
+        # APIs (which take tens of seconds and need network/keys). Force the
+        # deterministic local fallback path these assertions were written for.
+        self._recon_patch = mock.patch(
+            "app.services.mesh_service.reconstruct_from_images",
+            return_value={"source": "none", "warnings": []},
+        )
+        self._recon_patch.start()
+        self.addCleanup(self._recon_patch.stop)
 
     def test_health(self) -> None:
         response = self.client.get("/health")
