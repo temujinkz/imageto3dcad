@@ -3,11 +3,19 @@
 import { useEffect, useRef, useState } from "react";
 import { CADIntelligenceLogo } from "@/components/CADIntelligenceLogo";
 
-// DVD-screensaver-style bouncer, driven by requestAnimationFrame so we can (a)
-// tune the speed and (b) detect corner hits — which pure CSS keyframes can't.
-// On each corner it cycles color: normal -> black -> inverted -> normal ...
+// DVD-screensaver-style bouncer, driven by requestAnimationFrame so we can tune
+// the speed and recolor the logo on every wall bounce. Each border touch cycles
+// to the next palette entry below. Colors come from hue-rotating the orange mark
+// (which preserves its 3D shading); black is a brightness knockout.
 // Must live inside a `relative overflow-hidden` parent. Decorative (no pointer).
-const PHASE_FILTER = ["none", "brightness(0)", "invert(1)"];
+const COLOR_FILTERS = [
+  "none", // brand orange
+  "hue-rotate(200deg) saturate(1.25)", // blue
+  "brightness(0)", // black
+  "hue-rotate(255deg) saturate(1.2)", // purple
+  "hue-rotate(310deg) saturate(1.35)", // pink
+  "hue-rotate(120deg) saturate(1.15)" // green
+];
 
 export function BouncingLogo({
   size = 56,
@@ -37,8 +45,8 @@ export function BouncingLogo({
     let y = 10;
     let vx = 1;
     let vy = 1; // direction only; magnitude comes from `speed`
-    let corner = 0;
-    let lastCorner = -1;
+    let colorIndex = 0;
+    let lastHit = -1;
     let last = performance.now();
     let raf = 0;
 
@@ -71,14 +79,12 @@ export function BouncingLogo({
         hit = true;
       }
 
-      // Corner = we bounced while sitting near a corner on both axes. Debounced
-      // so a single corner approach only advances the color once.
-      const near = size * 0.9;
-      const nearCorner = (x <= near || x >= maxX - near) && (y <= near || y >= maxY - near);
-      if (hit && nearCorner && now - lastCorner > 600) {
-        lastCorner = now;
-        corner += 1;
-        setPhase(corner % PHASE_FILTER.length);
+      // Recolor on every border touch. Short cooldown guards against edge
+      // jitter double-counting a single bounce.
+      if (hit && now - lastHit > 120) {
+        lastHit = now;
+        colorIndex += 1;
+        setPhase(colorIndex % COLOR_FILTERS.length);
       }
 
       el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
@@ -97,7 +103,7 @@ export function BouncingLogo({
         width: size,
         height: size,
         opacity: 0.7,
-        filter: PHASE_FILTER[phase],
+        filter: COLOR_FILTERS[phase],
         transition: "filter 0.3s ease",
         willChange: "transform"
       }}
