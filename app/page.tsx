@@ -123,7 +123,6 @@ export default function Home() {
           {showViewer && (
             <ModelViewer
               modelUrl={result?.previewModelUrl}
-              meshSource={result?.meshSource}
               meshIsHighFidelity={result?.meshIsHighFidelity}
               warnings={result?.warnings}
               busy={busy}
