@@ -70,15 +70,18 @@ export function ModelViewer({ modelUrl, mode, meshSource, meshIsHighFidelity }: 
         {canPreview && modelUrl ? (
           <Canvas key={resetKey} camera={{ position: [2.8, 2.2, 3.4], fov: 42 }} dpr={[1, 2]}>
             <color attach="background" args={["#eef2f7"]} />
-            <ambientLight intensity={0.9} />
-            <directionalLight position={[4, 6, 5]} intensity={1.8} />
+            {/* Three-point studio setup: key + fill + rim, over a soft-image env */}
+            <ambientLight intensity={0.4} />
+            <directionalLight position={[4, 6, 5]} intensity={1.5} />
+            <directionalLight position={[-5, 3, -2]} intensity={0.5} />
+            <directionalLight position={[0, 3, -6]} intensity={0.8} />
             <Suspense fallback={<LoaderFallback />}>
               <Bounds fit clip observe margin={1.25}>
                 <Center>
                   <Model url={modelUrl} extension={extension ?? ""} />
                 </Center>
               </Bounds>
-              <Environment preset="city" />
+              <Environment preset="studio" />
             </Suspense>
             <gridHelper args={[6, 24, "#94a3b8", "#cbd5e1"]} position={[0, -0.02, 0]} />
             <OrbitControls makeDefault enableDamping />

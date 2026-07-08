@@ -226,11 +226,12 @@ def _prepare_image(job_id: str, store: JobStore, settings: Settings) -> dict:
     job = store.update(job_id, status="processing", progress=0.05, message="Removing background")
     masked_path = Path(job["masked_path"])
     options = job["options"]
+    enable_bg = bool(options.get("background_removal", True)) and settings.enable_rembg
     try:
         warnings = create_masked_image(
             input_path=input_path,
             output_path=masked_path,
-            enable_background_removal=bool(options.get("background_removal", True)) and settings.enable_rembg,
+            enable_background_removal=enable_bg,
             backend=settings.background_removal_backend,
         )
     except Exception as exc:
@@ -243,6 +244,30 @@ def _prepare_image(job_id: str, store: JobStore, settings: Settings) -> dict:
         )
     for warning in warnings:
         store.append_warning(job_id, warning)
+
+    # Background-remove every extra angle too, so multi-view reconstruction
+    # isn't polluted by the floor/background of the non-primary views (which
+    # otherwise show up as stray geometry around the object).
+    extra_paths = job.get("extra_image_paths", [])
+    if enable_bg and extra_paths:
+        masked_extras: list[str] = []
+        for angle_path in extra_paths:
+            src = Path(angle_path)
+            if not src.exists():
+                continue
+            masked_angle = src.with_name(f"{src.stem}_masked.png")
+            try:
+                create_masked_image(
+                    input_path=src,
+                    output_path=masked_angle,
+                    enable_background_removal=True,
+                    backend=settings.background_removal_backend,
+                )
+                masked_extras.append(str(masked_angle))
+            except Exception:
+                masked_extras.append(str(src))  # keep the raw angle if masking fails
+        store.update(job_id, extra_image_paths=masked_extras)
+
     return store.update(
         job_id,
         status="completed",

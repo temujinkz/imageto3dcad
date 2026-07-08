@@ -16,3 +16,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# stray CAD exports written to repo root by cadquery during tests
+/cad.step
+/freecad.step
+/cad.stl
+/cad.dxf
