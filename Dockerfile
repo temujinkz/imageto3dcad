@@ -34,7 +34,6 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 # App code (frontend + local state are excluded via .dockerignore).
 COPY . .
 
-# Hosts inject $PORT; default to 8000 for local `docker run`.
-ENV PORT=8000
-EXPOSE 8000
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Hosts inject $PORT; default to 8080 (Railway's routed port) if unset.
+EXPOSE 8080
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
