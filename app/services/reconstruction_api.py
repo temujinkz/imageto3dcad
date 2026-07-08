@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import importlib
 import io
+import shutil
 import time
 from pathlib import Path
 
@@ -182,6 +183,9 @@ def _wavespeed_reconstruct(image_paths: list[Path], output_dir: Path, settings: 
                     "front_image_url": _resized_data_uri(front),
                     "back_image_url": _resized_data_uri(back),
                     "left_image_url": _resized_data_uri(left),
+                    # Bake the object's real colors / labels into the mesh
+                    # instead of returning bare grey geometry.
+                    "textured_mesh": True,
                 },
             )
             if create.status_code >= 400:
@@ -375,29 +379,40 @@ def _normalize_mesh(raw_path: Path, output_dir: Path, source: str) -> dict:
     glb_path = output_dir / "mesh.glb"
     result: dict = {"source": source, "warnings": []}
 
+    # Preserve the original GLB verbatim so any baked texture / vertex colors
+    # (the object's real colors and label text) survive for the preview.
+    # Re-exporting a textured GLB through trimesh(force="mesh") flattens the
+    # scene and strips its materials, leaving a bare grey mesh - so the STL/OBJ
+    # (geometry-only formats anyway) are derived separately below.
+    preserved_glb = False
+    if raw_path.suffix.lower() == ".glb":
+        shutil.copyfile(raw_path, glb_path)
+        preserved_glb = True
+
     try:
         trimesh = importlib.import_module("trimesh")
         mesh = trimesh.load_mesh(raw_path, force="mesh")
         mesh.export(stl_path)
         mesh.export(obj_path)
-        mesh.export(glb_path)
-        result.update(
-            {
-                "stl_path": str(stl_path),
-                "obj_path": str(obj_path),
-                "glb_path": str(glb_path),
-                "preview_model_path": str(glb_path),
-            }
-        )
+        result["stl_path"] = str(stl_path)
+        result["obj_path"] = str(obj_path)
+        if not preserved_glb:
+            mesh.export(glb_path)
+        result["glb_path"] = str(glb_path)
+        result["preview_model_path"] = str(glb_path)
         return result
     except Exception as exc:
-        suffix = raw_path.suffix.lower()
-        if suffix == ".stl":
-            result["stl_path"] = str(raw_path)
-        elif suffix == ".obj":
-            result["obj_path"] = str(raw_path)
-        elif suffix == ".glb":
-            result["glb_path"] = str(raw_path)
-        result["preview_model_path"] = str(raw_path)
+        if preserved_glb:
+            result["glb_path"] = str(glb_path)
+            result["preview_model_path"] = str(glb_path)
+        else:
+            suffix = raw_path.suffix.lower()
+            if suffix == ".stl":
+                result["stl_path"] = str(raw_path)
+            elif suffix == ".obj":
+                result["obj_path"] = str(raw_path)
+            elif suffix == ".glb":
+                result["glb_path"] = str(raw_path)
+            result["preview_model_path"] = str(raw_path)
         result["warnings"].append(f"Trimesh normalization skipped: {exc}")
         return result
