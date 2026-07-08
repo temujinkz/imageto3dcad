@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { DownloadPanel } from "@/components/DownloadPanel";
 import { ModelViewer } from "@/components/ModelViewer";
 import { UploadZone } from "@/components/UploadZone";
+import { Typer } from "@/components/ui/Typer";
 import { processJob, uploadMedia } from "@/lib/api";
 import type { PipelineResult } from "@/lib/types";
 
@@ -91,13 +92,10 @@ export default function Home() {
     <main className="min-h-screen bg-bone">
       <div className="mx-auto w-full max-w-3xl px-5 py-12 sm:py-16">
         <header className="mb-8">
-          <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-[2.5rem] sm:leading-[1.1]">
-            Turn a photo into a 3D model
-          </h1>
-          <p className="mt-2 max-w-xl text-base leading-7 text-muted">
-            Take a few pictures of an object from different sides. You&apos;ll get a 3D model you can spin
-            around and download, either as a mesh or a CAD file you can open in AutoCAD or FreeCAD.
-          </p>
+          <Typer
+            text="Turn a photo into a 3D model"
+            className="text-3xl font-semibold tracking-tight text-ink sm:text-[2.5rem] sm:leading-[1.1]"
+          />
         </header>
 
         <div className="space-y-5">

@@ -89,3 +89,53 @@ input {
     0 1px 0 #b23f18,
     0 2px 4px rgba(120, 40, 10, 0.35);
 }
+
+/* ---------------------------------------------------------------------------
+   Typer reveal animation (port of arlan.me/vault/typer). Each character
+   ripples through randomized visual states before settling to plain text.
+--------------------------------------------------------------------------- */
+.typer-word {
+  display: inline-block;
+}
+
+.typer-char {
+  display: inline-block;
+  padding: 0 0.05em;
+  border-radius: 0.16em;
+  transition:
+    background-color 0.09s linear,
+    color 0.09s linear,
+    box-shadow 0.09s linear;
+}
+
+.typer-charHidden {
+  opacity: 0;
+}
+
+.typer-charFill {
+  background: #f2612f;
+  color: #fff;
+}
+
+.typer-charInverse {
+  background: #1a1a17;
+  color: #faf9f6;
+}
+
+.typer-charAccent {
+  color: #f2612f;
+}
+
+.typer-charAccentInverse {
+  background: rgba(242, 97, 47, 0.16);
+  color: #f2612f;
+}
+
+.typer-charAccentFill {
+  background: #ff8a4b;
+  color: #fff;
+}
+
+.typer-charBorder {
+  box-shadow: inset 0 0 0 0.09em #e0ddd4;
+}

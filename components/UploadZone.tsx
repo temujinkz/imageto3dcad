@@ -97,14 +97,10 @@ export function UploadZone({
             dragActive ? "border-accent bg-accent/5" : "border-line bg-bone/60 hover:border-accent/60 hover:bg-bone"
           }`}
         >
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 text-accent transition-all duration-300 group-hover:-translate-y-1 group-hover:scale-105 group-hover:bg-accent/15">
+          <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 text-accent transition-all duration-300 group-hover:-translate-y-1 group-hover:scale-105 group-hover:bg-accent/15">
             <ImagePlus className="h-7 w-7 transition-transform duration-300 group-hover:rotate-6" aria-hidden />
           </div>
-          <p className="text-lg font-semibold tracking-tight text-ink">Drop your photos here</p>
-          <p className="mt-1.5 max-w-sm text-sm leading-6 text-muted">
-            A few angles work best. You can also drop a short video of the object if you have one.
-          </p>
-          <span className="mt-5 inline-flex items-center gap-2 rounded-full border border-line bg-card px-4 py-2 text-sm font-medium text-ink transition-colors duration-200 group-hover:border-accent/50 group-hover:text-accent">
+          <span className="inline-flex items-center gap-2 rounded-full border border-line bg-card px-4 py-2 text-sm font-medium text-ink transition-colors duration-200 group-hover:border-accent/50 group-hover:text-accent">
             <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" aria-hidden /> Pick files
           </span>
         </div>
